@@ -1,0 +1,392 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ─── Enums ────────────────────────────────────────────────────────────────────
+
+enum Sexo {
+  M
+  F
+}
+
+enum Procedencia {
+  HOGAR
+  MISMO_PLANTEL
+  OTRO_PLANTEL
+}
+
+enum EstadoAlumno {
+  ACTIVO
+  RETIRADO
+  EGRESADO
+}
+
+enum TipoRepresentante {
+  MADRE
+  PADRE
+  TUTOR
+}
+
+enum NivelGrado {
+  PREESCOLAR
+  PRIMARIA
+}
+
+enum TipoServicio {
+  ALMUERZO
+  RESGUARDO
+  TAE_KWON_DO
+}
+
+enum CargoDocente {
+  DOCENTE
+  COORDINADOR
+  DIRECTOR
+  ADMINISTRATIVO
+  OBRERO
+}
+
+enum EstadoDocente {
+  ACTIVO
+  INACTIVO
+}
+
+enum TipoPago {
+  MENSUALIDAD
+  VENTA
+  INGRESO_MANUAL
+  INSCRIPCION
+}
+
+enum MonedaPago {
+  USD
+  BS
+}
+
+enum FormaPago {
+  EFECTIVO_USD
+  EFECTIVO_BS
+  PAGO_MOVIL_BS
+  TRANSFERENCIA_BS
+}
+
+// ─── Alumnos ──────────────────────────────────────────────────────────────────
+
+model Alumno {
+  id                  String       @id @default(cuid())
+  primerApellido      String
+  segundoApellido     String?
+  primerNombre        String
+  segundoNombre       String?
+  cedulaEscolar       String?      @unique
+  municipioNacimiento String?
+  estadoNacimiento    String?
+  sexo                Sexo
+  fechaNacimiento     DateTime     @db.Date
+  domicilio           String?
+  telefonoHogar       String?
+  procedencia         Procedencia  @default(HOGAR)
+  nombrePlantelOrigen String?
+  fotoUrl             String?
+  estado              EstadoAlumno @default(ACTIVO)
+  creadoEn            DateTime     @default(now())
+  actualizadoEn       DateTime     @updatedAt
+
+  representantes      Representante[]
+  autorizadosRetiro   AutorizadoRetiro[]
+  saludAlumno         SaludAlumno?
+  contactosEmergencia ContactoEmergencia[]
+  inscripciones       Inscripcion[]
+  pagos               Pago[]
+
+  @@map("alumnos")
+}
+
+model Representante {
+  id               String            @id @default(cuid())
+  alumnoId         String
+  tipo             TipoRepresentante
+  apellidosNombres String
+  edad             Int?
+  cedula           String?
+  telefonoHab      String?
+  telefonoCelular  String?
+  ocupacion        String?
+  telefonoOficina  String?
+  email            String?
+
+  alumno Alumno @relation(fields: [alumnoId], references: [id], onDelete: Cascade)
+
+  @@map("representantes")
+}
+
+model AutorizadoRetiro {
+  id       String  @id @default(cuid())
+  alumnoId String
+  nombre   String
+  cedula   String?
+  orden    Int
+
+  alumno Alumno @relation(fields: [alumnoId], references: [id], onDelete: Cascade)
+
+  @@map("autorizados_retiro")
+}
+
+model SaludAlumno {
+  id                   String  @id @default(cuid())
+  alumnoId             String  @unique
+  enfermedadActual     String?
+  tratamiento          String?
+  alergiasMedicamentos String?
+  medicamentoFiebre    String?
+  seguroSaludTelefono  String?
+
+  alumno Alumno @relation(fields: [alumnoId], references: [id], onDelete: Cascade)
+
+  @@map("salud_alumno")
+}
+
+model ContactoEmergencia {
+  id       String  @id @default(cuid())
+  alumnoId String
+  nombre   String
+  telefono String?
+  orden    Int
+
+  alumno Alumno @relation(fields: [alumnoId], references: [id], onDelete: Cascade)
+
+  @@map("contactos_emergencia")
+}
+
+// ─── Estructura Escolar ───────────────────────────────────────────────────────
+
+model AnoEscolar {
+  id     String  @id @default(cuid())
+  nombre String  @unique
+  activo Boolean @default(false)
+
+  lapsos        Lapso[]
+  inscripciones Inscripcion[]
+  pagos         Pago[]
+
+  @@map("anos_escolares")
+}
+
+model Lapso {
+  id           String   @id @default(cuid())
+  anoEscolarId String
+  nombre       String
+  fechaInicio  DateTime @db.Date
+  fechaFin     DateTime @db.Date
+
+  anoEscolar AnoEscolar @relation(fields: [anoEscolarId], references: [id], onDelete: Cascade)
+
+  @@map("lapsos")
+}
+
+model Grado {
+  id     String     @id @default(cuid())
+  nombre String     @unique
+  nivel  NivelGrado
+  orden  Int
+  activo Boolean    @default(true)
+
+  secciones     Seccion[]
+  inscripciones Inscripcion[]
+
+  @@map("grados")
+}
+
+model Seccion {
+  id      String  @id @default(cuid())
+  nombre  String
+  gradoId String
+  activo  Boolean @default(true)
+
+  grado         Grado         @relation(fields: [gradoId], references: [id], onDelete: Cascade)
+  inscripciones Inscripcion[]
+
+  @@unique([nombre, gradoId])
+  @@map("secciones")
+}
+
+// ─── Inscripciones ────────────────────────────────────────────────────────────
+
+model Inscripcion {
+  id                   String   @id @default(cuid())
+  alumnoId             String
+  anoEscolarId         String
+  gradoId              String
+  seccionId            String?
+  descuentoMontoUsd    Decimal? @db.Decimal(10, 2)
+  descuentoObservacion String?
+  fechaInscripcion     DateTime @default(now())
+
+  alumno     Alumno     @relation(fields: [alumnoId], references: [id])
+  anoEscolar AnoEscolar @relation(fields: [anoEscolarId], references: [id])
+  grado      Grado      @relation(fields: [gradoId], references: [id])
+  seccion    Seccion?   @relation(fields: [seccionId], references: [id])
+  servicios  ServicioAlumno[]
+
+  @@unique([alumnoId, anoEscolarId])
+  @@map("inscripciones")
+}
+
+model ServicioAlumno {
+  id            String       @id @default(cuid())
+  alumnoId      String
+  inscripcionId String
+  tipo          TipoServicio
+  activo        Boolean      @default(true)
+
+  inscripcion Inscripcion @relation(fields: [inscripcionId], references: [id], onDelete: Cascade)
+
+  @@map("servicios_alumno")
+}
+
+// ─── Docentes ─────────────────────────────────────────────────────────────────
+
+model Docente {
+  id              String        @id @default(cuid())
+  primerApellido  String
+  segundoApellido String?
+  primerNombre    String
+  segundoNombre   String?
+  cedula          String        @unique
+  telefono        String?
+  email           String?
+  cargo           CargoDocente  @default(DOCENTE)
+  gradosAsignados String?
+  estado          EstadoDocente @default(ACTIVO)
+  fechaIngreso    DateTime?     @db.Date
+  creadoEn        DateTime      @default(now())
+
+  pagosDocente PagoDocente[]
+
+  @@map("docentes")
+}
+
+// ─── Finanzas ─────────────────────────────────────────────────────────────────
+
+model TasaCambio {
+  id            String   @id @default(cuid())
+  tasa          Decimal  @db.Decimal(12, 4)
+  fechaRegistro DateTime @default(now())
+  registradoPor String?
+
+  pagos        Pago[]
+  pagosDocente PagoDocente[]
+  egresos      Egreso[]
+
+  @@map("tasas_cambio")
+}
+
+model Pago {
+  id               String     @id @default(cuid())
+  tipo             TipoPago
+  alumnoId         String?
+  anoEscolarId     String?
+  montoUsd         Decimal    @db.Decimal(10, 2)
+  montoBs          Decimal?   @db.Decimal(14, 2)
+  tasaCambioId     String?
+  monedaPagada     MonedaPago
+  formaPago        FormaPago
+  numeroReferencia String?
+  fechaPago        DateTime   @default(now())
+  observaciones    String?
+  numeroRecibo     String?  @unique
+
+  alumno     Alumno?     @relation(fields: [alumnoId], references: [id])
+  anoEscolar AnoEscolar? @relation(fields: [anoEscolarId], references: [id])
+  tasaCambio TasaCambio? @relation(fields: [tasaCambioId], references: [id])
+  conceptos  ConceptoPago[]
+
+  @@map("pagos")
+}
+
+model ConceptoPago {
+  id       String  @id @default(cuid())
+  pagoId   String
+  concepto String
+  mesAno   String?
+  montoUsd Decimal @db.Decimal(10, 2)
+
+  pago Pago @relation(fields: [pagoId], references: [id], onDelete: Cascade)
+
+  @@map("conceptos_pago")
+}
+
+model PagoDocente {
+  id                String    @id @default(cuid())
+  docenteId         String
+  periodoMes        Int
+  periodoAno        Int
+  baseBs            Decimal   @db.Decimal(14, 2)
+  bonoUsd           Decimal?  @db.Decimal(10, 2)
+  bonoBsEquivalente Decimal?  @db.Decimal(14, 2)
+  otrosConceptos    Json?
+  deducciones       Json?
+  tasaCambioId      String?
+  formaPago         FormaPago
+  numeroReferencia  String?
+  fechaPago         DateTime  @default(now())
+  totalBs           Decimal   @db.Decimal(14, 2)
+
+  docente    Docente     @relation(fields: [docenteId], references: [id])
+  tasaCambio TasaCambio? @relation(fields: [tasaCambioId], references: [id])
+  egresos    Egreso[]
+
+  @@map("pagos_docente")
+}
+
+model Egreso {
+  id                String     @id @default(cuid())
+  categoriaEgresoId String
+  descripcion       String?
+  montoUsd          Decimal?   @db.Decimal(10, 2)
+  montoBs           Decimal?   @db.Decimal(14, 2)
+  tasaCambioId      String?
+  formaPago         FormaPago?
+  proveedor         String?
+  numeroFactura     String?
+  fecha             DateTime   @default(now())
+  pagoDocenteId     String?
+
+  categoriaEgreso CategoriaEgreso @relation(fields: [categoriaEgresoId], references: [id])
+  tasaCambio      TasaCambio?     @relation(fields: [tasaCambioId], references: [id])
+  pagoDocente     PagoDocente?    @relation(fields: [pagoDocenteId], references: [id])
+
+  @@map("egresos")
+}
+
+// ─── Catálogos ────────────────────────────────────────────────────────────────
+
+model CategoriaEgreso {
+  id     String  @id @default(cuid())
+  nombre String  @unique
+  activo Boolean @default(true)
+
+  egresos Egreso[]
+
+  @@map("categorias_egreso")
+}
+
+model Producto {
+  id        String  @id @default(cuid())
+  nombre    String  @unique
+  precioUsd Decimal @db.Decimal(10, 2)
+  activo    Boolean @default(true)
+
+  @@map("productos")
+}
+
+model Configuracion {
+  clave String @id
+  valor Json
+
+  @@map("configuracion")
+}

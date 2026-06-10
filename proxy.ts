@@ -33,12 +33,18 @@ export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const isLoginPage = pathname.startsWith("/login");
 
-  // Sin sesión: redirigir a /login
-  if (!user && !isLoginPage) {
-    return NextResponse.redirect(new URL("/login", request.url));
+  if (!user) {
+    if (pathname.startsWith("/api/")) {
+      return new NextResponse(JSON.stringify({ error: "No autorizado" }), {
+        status: 401,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+    if (!isLoginPage) {
+      return NextResponse.redirect(new URL("/login", request.url));
+    }
   }
 
-  // Con sesión en /login: redirigir al dashboard
   if (user && isLoginPage) {
     return NextResponse.redirect(new URL("/dashboard", request.url));
   }
@@ -48,7 +54,6 @@ export async function proxy(request: NextRequest) {
 
 export const config = {
   matcher: [
-    // Proteger todo excepto archivos estáticos de Next.js e imágenes
-    "/((?!_next/static|_next/image|favicon\\.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
+    "/((?!_next/static|_next/image|favicon\\.ico|logo\\.jpg|logo\\.png).*)",
   ],
 };

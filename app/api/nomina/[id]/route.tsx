@@ -26,18 +26,20 @@ export async function GET(
     ? `data:image/jpeg;base64,${fs.readFileSync(logoPath).toString("base64")}`
     : null;
 
-  const buffer = await renderToBuffer(
-    <ComprobanteNomina pago={pago} config={config} logoBase64={logoBase64} />
-  );
-
-  const docente = pago.docente;
-  const apellido = docente.primerApellido.toLowerCase().replace(/\s+/g, "-");
-  const filename = `nomina-${pago.periodoAno}-${String(pago.periodoMes).padStart(2, "0")}-${apellido}.pdf`;
-
-  return new Response(new Uint8Array(buffer), {
-    headers: {
-      "Content-Type": "application/pdf",
-      "Content-Disposition": `inline; filename="${filename}"`,
-    },
-  });
+  try {
+    const buffer = await renderToBuffer(
+      <ComprobanteNomina pago={pago} config={config} logoBase64={logoBase64} />
+    );
+    const docente = pago.docente;
+    const apellido = docente.primerApellido.toLowerCase().replace(/\s+/g, "-");
+    const filename = `nomina-${pago.periodoAno}-${String(pago.periodoMes).padStart(2, "0")}-${apellido}.pdf`;
+    return new Response(new Uint8Array(buffer), {
+      headers: {
+        "Content-Type": "application/pdf",
+        "Content-Disposition": `inline; filename="${filename}"`,
+      },
+    });
+  } catch {
+    return new Response("Error al generar el PDF", { status: 500 });
+  }
 }

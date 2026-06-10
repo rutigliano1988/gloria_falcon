@@ -45,7 +45,7 @@ export default async function AlumnoDetallePage({ params }: { params: Promise<{ 
         <div className="flex-1">
           <div className="flex items-center gap-3">
             <h2 className="text-lg font-semibold">
-              {alumno.primerApellido} {alumno.segundoApellido} {alumno.primerNombre} {alumno.segundoNombre}
+              {[alumno.primerApellido, alumno.segundoApellido, alumno.primerNombre, alumno.segundoNombre].filter(Boolean).join(" ")}
             </h2>
             <Badge variant={ESTADO_BADGE[alumno.estado]}>{ESTADO_LABEL[alumno.estado]}</Badge>
           </div>

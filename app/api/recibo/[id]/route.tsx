@@ -22,16 +22,18 @@ export async function GET(
     ? `data:image/jpeg;base64,${fs.readFileSync(logoPath).toString("base64")}`
     : null;
 
-  const buffer = await renderToBuffer(
-    <ReciboPago pago={pago} config={config} logoBase64={logoBase64} />
-  );
-
-  const filename = `recibo-${pago.numeroRecibo ?? id}.pdf`;
-
-  return new Response(new Uint8Array(buffer), {
-    headers: {
-      "Content-Type": "application/pdf",
-      "Content-Disposition": `inline; filename="${filename}"`,
-    },
-  });
+  try {
+    const buffer = await renderToBuffer(
+      <ReciboPago pago={pago} config={config} logoBase64={logoBase64} />
+    );
+    const filename = `recibo-${pago.numeroRecibo ?? id}.pdf`;
+    return new Response(new Uint8Array(buffer), {
+      headers: {
+        "Content-Type": "application/pdf",
+        "Content-Disposition": `inline; filename="${filename}"`,
+      },
+    });
+  } catch {
+    return new Response("Error al generar el PDF", { status: 500 });
+  }
 }

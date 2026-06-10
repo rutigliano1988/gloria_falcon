@@ -35,13 +35,21 @@ export type PagoConDetalles = {
   conceptos: { concepto: string; mesAno: string | null; montoUsd: number }[];
 };
 
+// Convierte "MM/YYYY" a número comparable (evita error de comparación de strings)
+function mesAnoToNum(mesAno: string): number {
+  const [mm, yyyy] = mesAno.split("/");
+  return parseInt(yyyy) * 100 + parseInt(mm);
+}
+
 // ─── Fetch principal (vista /mensualidades) ───────────────────────────────────
 
-export async function getMensualidadesData(mesAno?: string) {
+export async function getMensualidadesData(mesAno?: string, anoEscolarId?: string) {
   const mesAnoConsulta = mesAno || getMesAnoActual();
 
   const [anoActivo, tasaActual, productos, alumnos] = await Promise.all([
-    prisma.anoEscolar.findFirst({ where: { activo: true } }),
+    anoEscolarId
+      ? prisma.anoEscolar.findUnique({ where: { id: anoEscolarId } })
+      : prisma.anoEscolar.findFirst({ where: { activo: true } }),
     prisma.tasaCambio.findFirst({ orderBy: { fechaRegistro: "desc" } }),
     prisma.producto.findMany({ where: { activo: true } }),
     prisma.alumno.findMany({
@@ -86,7 +94,8 @@ export async function getMensualidadesData(mesAno?: string) {
 
   const todosLosMeses = getMesesAnoEscolar(anoActivo.nombre);
   const mesActual = getMesAnoActual();
-  const mesesPasados = todosLosMeses.filter((m) => m <= mesActual);
+  const mesActualNum = mesAnoToNum(mesActual);
+  const mesesPasados = todosLosMeses.filter((m) => mesAnoToNum(m) <= mesActualNum);
   const alumnoIds = alumnosActivos.map((a) => a.id);
 
   // Query masiva: todos los ConceptoPago de todos los alumnos en meses del año

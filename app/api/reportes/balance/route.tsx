@@ -23,16 +23,18 @@ export async function GET(req: NextRequest) {
     ? `data:image/jpeg;base64,${fs.readFileSync(logoPath).toString("base64")}`
     : null;
 
-  const buffer = await renderToBuffer(
-    <ReporteBalance data={data} config={config} logoBase64={logoBase64} />
-  );
-
-  const filename = `balance-${String(data.mes).padStart(2, "0")}-${data.ano}.pdf`;
-
-  return new Response(new Uint8Array(buffer), {
-    headers: {
-      "Content-Type": "application/pdf",
-      "Content-Disposition": `inline; filename="${filename}"`,
-    },
-  });
+  try {
+    const buffer = await renderToBuffer(
+      <ReporteBalance data={data} config={config} logoBase64={logoBase64} />
+    );
+    const filename = `balance-${String(data.mes).padStart(2, "0")}-${data.ano}.pdf`;
+    return new Response(new Uint8Array(buffer), {
+      headers: {
+        "Content-Type": "application/pdf",
+        "Content-Disposition": `inline; filename="${filename}"`,
+      },
+    });
+  } catch {
+    return new Response("Error al generar el PDF", { status: 500 });
+  }
 }

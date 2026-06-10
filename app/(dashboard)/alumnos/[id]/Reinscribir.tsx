@@ -103,7 +103,7 @@ export function Reinscribir({ alumnoId, grados, anos, anosInscritos }: Props) {
   return (
     <Dialog open={open} onOpenChange={(v) => { setOpen(v); if (!v) reset(); }}>
       <DialogTrigger asChild>
-        <Button variant="outline" size="sm">
+        <Button size="sm">
           Reinscribir
         </Button>
       </DialogTrigger>

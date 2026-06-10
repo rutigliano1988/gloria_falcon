@@ -2,8 +2,9 @@ import Link from "next/link";
 import { getAlumnos } from "./actions";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Search } from "lucide-react";
+import { Plus } from "lucide-react";
 import { calcularEdad, formatFecha } from "@/lib/utils";
+import { AlumnosSearch } from "./AlumnosSearch";
 
 const ESTADO_BADGE: Record<string, "success" | "destructive" | "secondary"> = {
   ACTIVO: "success",
@@ -29,28 +30,7 @@ export default async function AlumnosPage({
     <div className="space-y-5">
       {/* Toolbar */}
       <div className="flex items-center gap-3">
-        <form className="flex flex-1 items-center gap-2" method="GET">
-          <div className="relative flex-1 max-w-sm">
-            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-            <input
-              name="q"
-              defaultValue={q}
-              placeholder="Buscar por nombre o cédula..."
-              className="flex h-9 w-full rounded-md border border-input bg-white pl-8 pr-3 text-sm shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-            />
-          </div>
-          <select
-            name="estado"
-            defaultValue={estado ?? ""}
-            className="h-9 rounded-md border border-input bg-white px-3 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-          >
-            <option value="">Todos los estados</option>
-            <option value="ACTIVO">Activos</option>
-            <option value="RETIRADO">Retirados</option>
-            <option value="EGRESADO">Egresados</option>
-          </select>
-          <Button type="submit" variant="secondary" size="sm">Filtrar</Button>
-        </form>
+        <AlumnosSearch defaultQ={q} defaultEstado={estado} />
         <Link href="/alumnos/nuevo">
           <Button size="sm">
             <Plus className="mr-1 h-4 w-4" /> Nueva Inscripción
@@ -89,7 +69,7 @@ export default async function AlumnosPage({
                   <tr key={alumno.id} className="border-b last:border-0 hover:bg-gray-50 transition-colors">
                     <td className="px-4 py-3">
                       <Link href={`/alumnos/${alumno.id}`} className="hover:text-primary font-medium">
-                        {alumno.primerApellido} {alumno.segundoApellido} {alumno.primerNombre} {alumno.segundoNombre}
+                        {[alumno.primerApellido, alumno.segundoApellido, alumno.primerNombre, alumno.segundoNombre].filter(Boolean).join(" ")}
                       </Link>
                     </td>
                     <td className="px-4 py-3 text-muted-foreground">{alumno.cedulaEscolar ?? "—"}</td>

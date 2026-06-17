@@ -36,14 +36,14 @@ export default async function AlumnoDetallePage({ params }: { params: Promise<{ 
   return (
     <div className="max-w-4xl mx-auto space-y-5">
       {/* Header */}
-      <div className="flex items-center gap-4">
+      <div className="flex flex-wrap items-center gap-3">
         <Link href="/alumnos">
           <Button variant="outline" size="sm">
             <ArrowLeft className="mr-1 h-4 w-4" /> Volver
           </Button>
         </Link>
-        <div className="flex-1">
-          <div className="flex items-center gap-3">
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-3 flex-wrap">
             <h2 className="text-lg font-semibold">
               {[alumno.primerApellido, alumno.segundoApellido, alumno.primerNombre, alumno.segundoNombre].filter(Boolean).join(" ")}
             </h2>
@@ -53,7 +53,7 @@ export default async function AlumnoDetallePage({ params }: { params: Promise<{ 
             <p className="text-sm text-muted-foreground">Cédula Escolar: {alumno.cedulaEscolar}</p>
           )}
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 shrink-0">
           <Reinscribir alumnoId={alumno.id} grados={grados} anos={anos} anosInscritos={anosInscritos} />
           <CambiarEstado alumnoId={alumno.id} estadoActual={alumno.estado} />
         </div>

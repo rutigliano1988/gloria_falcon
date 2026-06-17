@@ -1,3 +1,5 @@
+export const dynamic = "force-dynamic";
+
 import Link from "next/link";
 import { getAlumnos } from "./actions";
 import { Button } from "@/components/ui/button";

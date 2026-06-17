@@ -8,6 +8,7 @@ import {
   TIPO_SERVICIO_LABELS,
   getMesesAnoEscolar,
   getMesAnoActual,
+  mesAnoToNum,
 } from "@/lib/utils";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -34,12 +35,6 @@ export type PagoConDetalles = {
   monedaPagada: string;
   conceptos: { concepto: string; mesAno: string | null; montoUsd: number }[];
 };
-
-// Convierte "MM/YYYY" a número comparable (evita error de comparación de strings)
-function mesAnoToNum(mesAno: string): number {
-  const [mm, yyyy] = mesAno.split("/");
-  return parseInt(yyyy) * 100 + parseInt(mm);
-}
 
 // ─── Fetch principal (vista /mensualidades) ───────────────────────────────────
 
@@ -139,13 +134,14 @@ export async function getMensualidadesData(mesAno?: string, anoEscolarId?: strin
     const montoMensualUsd = Math.max(0, montoBase - descuento);
 
     const mesPagados = pagadosPorAlumnoMes.get(alumno.id);
-    const conceptosPagadosMes = mesPagados?.get(mesAnoConsulta) ?? new Set<string>();
-    const solvente = conceptosEsperados.every((c) => conceptosPagadosMes.has(c));
 
     const mesesMorosos = mesesPasados.filter((mes) => {
       const pagados = mesPagados?.get(mes) ?? new Set<string>();
       return !conceptosEsperados.every((c) => pagados.has(c));
     });
+
+    // Solvente = sin meses morosos pendientes (incluye el caso donde el año aún no comenzó)
+    const solvente = mesesMorosos.length === 0;
 
     const nombreCompleto = [
       alumno.primerApellido,

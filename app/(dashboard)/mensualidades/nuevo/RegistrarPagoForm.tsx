@@ -11,6 +11,7 @@ import {
   calcularBs,
   formatMesAno,
   getMesesAnoEscolar,
+  mesAnoToNum,
   FORMA_PAGO_LABELS,
   TIPO_SERVICIO_LABELS,
   parsePrismaError,
@@ -64,6 +65,7 @@ export function RegistrarPagoForm({
     const hoy = new Date();
     return `${String(hoy.getMonth() + 1).padStart(2, "0")}/${hoy.getFullYear()}`;
   })();
+  const mesActualNum = mesAnoToNum(mesActual);
 
   const precioMap: Record<string, number> = {};
   for (const p of productos) {
@@ -257,7 +259,7 @@ export function RegistrarPagoForm({
           </h3>
           <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-2">
             {mesesDelAno.map((mes) => {
-              const esFuturo = mes > mesActual;
+              const esFuturo = mesAnoToNum(mes) > mesActualNum;
               const seleccionado = mesesSeleccionados.includes(mes);
               let label = mes;
               try { label = formatMesAno(mes); } catch { /* */ }

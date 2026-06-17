@@ -87,6 +87,12 @@ export const PROCEDENCIA_LABELS: Record<string, string> = {
   OTRO_PLANTEL: "Otro plantel",
 };
 
+// Convierte "MM/YYYY" a número comparable (evita bug de comparación de strings entre años)
+export function mesAnoToNum(mesAno: string): number {
+  const [mm, yyyy] = mesAno.split("/");
+  return parseInt(yyyy) * 100 + parseInt(mm);
+}
+
 // Para el formato "MM/YYYY" que usa ConceptoPago.mesAno
 export function formatMesAno(mesAno: string): string {
   const [mm, yyyy] = mesAno.split("/");

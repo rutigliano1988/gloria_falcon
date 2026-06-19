@@ -10,7 +10,6 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from "@/components/ui/dialog";
 import {
   Select,
@@ -101,12 +100,11 @@ export function Reinscribir({ alumnoId, grados, anos, anosInscritos }: Props) {
   };
 
   return (
-    <Dialog open={open} onOpenChange={(v) => { setOpen(v); if (!v) reset(); }}>
-      <DialogTrigger asChild>
-        <Button size="sm">
-          Reinscribir
-        </Button>
-      </DialogTrigger>
+    <>
+      <Button size="sm" onClick={() => setOpen(true)}>
+        Reinscribir
+      </Button>
+      <Dialog open={open} onOpenChange={(v) => { setOpen(v); if (!v) reset(); }}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>Nueva Inscripción</DialogTitle>
@@ -218,5 +216,6 @@ export function Reinscribir({ alumnoId, grados, anos, anosInscritos }: Props) {
         </div>
       </DialogContent>
     </Dialog>
+    </>
   );
 }

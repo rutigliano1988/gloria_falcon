@@ -240,7 +240,7 @@ export function FichaAlumnoForm({ grados, anos }: Props) {
               </Select>
             </div>
             <div>
-              <Label>Fecha de Nacimiento *</Label>
+              <Label>Fecha de Nacimiento * <span className="text-xs font-normal text-muted-foreground">(dd/mm/aaaa)</span></Label>
               <Input type="date" {...f("fechaNacimiento")} />
               {edad !== null && (
                 <p className="text-xs text-muted-foreground mt-1">Edad: {edad} años</p>

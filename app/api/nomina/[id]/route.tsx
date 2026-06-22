@@ -1,10 +1,9 @@
 import { renderToBuffer } from "@react-pdf/renderer";
 import { NextRequest } from "next/server";
-import path from "path";
-import fs from "fs";
 import { getPagoNominaById } from "@/app/(dashboard)/docentes/actions";
 import { getConfigColegio } from "@/app/(dashboard)/mensualidades/actions";
 import { ComprobanteNomina } from "@/components/pdf/ComprobanteNomina";
+import { getLogoBase64 } from "@/lib/logo";
 
 export async function GET(
   _req: NextRequest,
@@ -21,10 +20,7 @@ export async function GET(
     return new Response("Comprobante no encontrado", { status: 404 });
   }
 
-  const logoPath = path.join(process.cwd(), "public", "logo.jpg");
-  const logoBase64 = fs.existsSync(logoPath)
-    ? `data:image/jpeg;base64,${fs.readFileSync(logoPath).toString("base64")}`
-    : null;
+  const logoBase64 = await getLogoBase64();
 
   try {
     const buffer = await renderToBuffer(
@@ -39,7 +35,8 @@ export async function GET(
         "Content-Disposition": `inline; filename="${filename}"`,
       },
     });
-  } catch {
+  } catch (e) {
+    console.error("[PDF nomina]", e);
     return new Response("Error al generar el PDF", { status: 500 });
   }
 }

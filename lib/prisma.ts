@@ -2,7 +2,7 @@ import { PrismaClient } from "@prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
 
 function createPrismaClient() {
-  const connectionString = process.env.DATABASE_URL;
+  const connectionString = (process.env.DATABASE_URL ?? "").replace(/^﻿/, "") || undefined;
   if (!connectionString) {
     // During build/type generation without a real DB, return a mock-free instance
     // that will fail gracefully at runtime instead of at module load

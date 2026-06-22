@@ -1,10 +1,9 @@
 import { renderToBuffer } from "@react-pdf/renderer";
 import { NextRequest } from "next/server";
-import path from "path";
-import fs from "fs";
 import { getEstadoCuentaAlumno } from "@/app/(dashboard)/reportes/actions";
 import { getConfigColegio } from "@/app/(dashboard)/mensualidades/actions";
 import { ReporteEstadoCuenta } from "@/components/pdf/ReporteEstadoCuenta";
+import { getLogoBase64 } from "@/lib/logo";
 
 export async function GET(req: NextRequest) {
   const alumnoId = req.nextUrl.searchParams.get("alumnoId");
@@ -22,10 +21,7 @@ export async function GET(req: NextRequest) {
     return new Response("Alumno no encontrado", { status: 404 });
   }
 
-  const logoPath = path.join(process.cwd(), "public", "logo.jpg");
-  const logoBase64 = fs.existsSync(logoPath)
-    ? `data:image/jpeg;base64,${fs.readFileSync(logoPath).toString("base64")}`
-    : null;
+  const logoBase64 = await getLogoBase64();
 
   try {
     const buffer = await renderToBuffer(
@@ -39,7 +35,8 @@ export async function GET(req: NextRequest) {
         "Content-Disposition": `inline; filename="${filename}"`,
       },
     });
-  } catch {
+  } catch (e) {
+    console.error("[PDF estado-cuenta]", e);
     return new Response("Error al generar el PDF", { status: 500 });
   }
 }

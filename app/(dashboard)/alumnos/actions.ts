@@ -53,7 +53,7 @@ const alumnoSchema = z.object({
   anoEscolarId: z.string().min(1, "Selecciona el año escolar"),
   gradoId: z.string().min(1, "Selecciona el grado"),
   seccionId: z.string().optional().nullable(),
-  descuentoMontoUsd: z.number().optional().nullable(),
+  descuentoMontoUsd: z.number().min(0, "El descuento no puede ser negativo").optional().nullable(),
   descuentoObservacion: z.string().optional().nullable(),
   servicios: z.array(z.enum(["ALMUERZO", "RESGUARDO", "TAE_KWON_DO"])).optional(),
 });
@@ -100,10 +100,10 @@ export async function crearAlumno(data: AlumnoFormData) {
     // Representantes
     const reps = [];
     if (parsed.madre?.apellidosNombres) {
-      reps.push({ ...parsed.madre, alumnoId: alumno.id, tipo: "MADRE" as const });
+      reps.push({ ...parsed.madre, email: parsed.madre.email || null, alumnoId: alumno.id, tipo: "MADRE" as const });
     }
     if (parsed.padre?.apellidosNombres) {
-      reps.push({ ...parsed.padre, alumnoId: alumno.id, tipo: "PADRE" as const });
+      reps.push({ ...parsed.padre, email: parsed.padre.email || null, alumnoId: alumno.id, tipo: "PADRE" as const });
     }
     if (reps.length > 0) {
       await tx.representante.createMany({ data: reps });
@@ -165,7 +165,7 @@ const reinscripcionSchema = z.object({
   anoEscolarId: z.string().min(1),
   gradoId: z.string().min(1),
   seccionId: z.string().optional().nullable(),
-  descuentoMontoUsd: z.number().optional().nullable(),
+  descuentoMontoUsd: z.number().min(0, "El descuento no puede ser negativo").optional().nullable(),
   descuentoObservacion: z.string().optional().nullable(),
   servicios: z.array(z.enum(["ALMUERZO", "RESGUARDO", "TAE_KWON_DO"])).optional(),
 });

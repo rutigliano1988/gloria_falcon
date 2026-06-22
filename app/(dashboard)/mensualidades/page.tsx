@@ -3,7 +3,7 @@ import { Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { getMensualidadesData } from "./actions";
-import { getMesAnoActual, getMesesAnoEscolar } from "@/lib/utils";
+import { getMesAnoActual, getMesesAnoEscolar, mesAnoToNum } from "@/lib/utils";
 import { SolvenciaTable } from "./SolvenciaTable";
 import { HistorialPagos } from "./HistorialPagos";
 import { formatUSD, formatMesAno } from "@/lib/utils";
@@ -66,7 +66,7 @@ export default async function MensualidadesPage({
               {mesesSelector.map((m) => {
                 let label = m;
                 try { label = formatMesAno(m); } catch { /* */ }
-                const esFuturo = m > mesActual;
+                const esFuturo = mesAnoToNum(m) > mesAnoToNum(mesActual);
                 return (
                   <option key={m} value={m} disabled={esFuturo}>
                     {label}{esFuturo ? " (futuro)" : ""}

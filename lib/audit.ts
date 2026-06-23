@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { createClient } from "@/lib/supabase/server";
+import type { Prisma } from "@prisma/client";
 
 interface AuditData {
   accion: string;
@@ -22,7 +23,7 @@ export async function registrarAudit(data: AuditData) {
         accion: data.accion,
         entidad: data.entidad ?? null,
         entidadId: data.entidadId ?? null,
-        meta: data.meta ?? undefined,
+        meta: data.meta as Prisma.InputJsonValue | undefined,
       },
     });
   } catch {

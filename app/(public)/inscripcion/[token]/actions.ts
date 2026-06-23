@@ -2,7 +2,7 @@
 
 import { prisma } from "@/lib/prisma";
 import { z } from "zod";
-import type { Prisma } from "@prisma/client";
+import { Prisma } from "@prisma/client";
 
 const representanteSchema = z.object({
   tipo: z.enum(["MADRE", "PADRE", "TUTOR"]),

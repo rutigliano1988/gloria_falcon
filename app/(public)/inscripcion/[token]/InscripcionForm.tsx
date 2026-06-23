@@ -4,6 +4,10 @@ import { useState, useTransition } from "react";
 import { enviarSolicitud, type SolicitudFormData } from "./actions";
 import { GraduationCap, CheckCircle2, AlertCircle } from "lucide-react";
 
+const inputCls = "w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent";
+const labelCls = "block text-sm font-medium text-gray-700 mb-1";
+const sectionCls = "bg-white rounded-xl shadow-sm border border-gray-200 p-5 md:p-6";
+
 const ESTADOS_VE = [
   "Amazonas","Anzoátegui","Apure","Aragua","Barinas","Bolívar","Carabobo",
   "Cojedes","Delta Amacuro","Distrito Capital","Falcón","Guárico","Lara",
@@ -29,6 +33,70 @@ const emptyRep = (tipo: "MADRE" | "PADRE" | "TUTOR"): RepForm => ({
   tipo, apellidosNombres: "", cedula: "", edad: "", telefonoHab: "",
   telefonoCelular: "", telefonoOficina: "", email: "", ocupacion: "",
 });
+
+function RepFields({
+  rep,
+  setter,
+  title,
+}: {
+  rep: RepForm;
+  setter: React.Dispatch<React.SetStateAction<RepForm>>;
+  title: string;
+}) {
+  const set = (k: keyof RepForm, v: string) => setter((p) => ({ ...p, [k]: v }));
+  return (
+    <div className="space-y-4">
+      <h3 className="font-semibold text-gray-800">{title}</h3>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="md:col-span-2">
+          <label className={labelCls}>Apellidos y Nombres *</label>
+          <input className={inputCls} value={rep.apellidosNombres}
+            onChange={(e) => set("apellidosNombres", e.target.value)}
+            placeholder="Apellido Apellido, Nombre Nombre" />
+        </div>
+        <div>
+          <label className={labelCls}>Cédula de Identidad</label>
+          <input className={inputCls} value={rep.cedula}
+            onChange={(e) => set("cedula", e.target.value)}
+            placeholder="V-12345678" />
+        </div>
+        <div>
+          <label className={labelCls}>Edad</label>
+          <input className={inputCls} type="number" min="18" max="99" value={rep.edad}
+            onChange={(e) => set("edad", e.target.value)} />
+        </div>
+        <div>
+          <label className={labelCls}>Teléfono Habitación</label>
+          <input className={inputCls} value={rep.telefonoHab}
+            onChange={(e) => set("telefonoHab", e.target.value)}
+            placeholder="0212-0000000" />
+        </div>
+        <div>
+          <label className={labelCls}>Teléfono Celular</label>
+          <input className={inputCls} value={rep.telefonoCelular}
+            onChange={(e) => set("telefonoCelular", e.target.value)}
+            placeholder="0414-0000000" />
+        </div>
+        <div>
+          <label className={labelCls}>Teléfono Oficina</label>
+          <input className={inputCls} value={rep.telefonoOficina}
+            onChange={(e) => set("telefonoOficina", e.target.value)} />
+        </div>
+        <div>
+          <label className={labelCls}>Ocupación</label>
+          <input className={inputCls} value={rep.ocupacion}
+            onChange={(e) => set("ocupacion", e.target.value)} />
+        </div>
+        <div className="md:col-span-2">
+          <label className={labelCls}>Correo Electrónico</label>
+          <input className={inputCls} type="email" value={rep.email}
+            onChange={(e) => set("email", e.target.value)}
+            placeholder="ejemplo@correo.com" />
+        </div>
+      </div>
+    </div>
+  );
+}
 
 export function InscripcionForm({ token }: Props) {
   const [isPending, startTransition] = useTransition();
@@ -68,11 +136,6 @@ export function InscripcionForm({ token }: Props) {
   });
 
   const setAlumnoField = (k: string, v: string) => setAlumno((p) => ({ ...p, [k]: v }));
-  const setRepField = (
-    setter: React.Dispatch<React.SetStateAction<RepForm>>,
-    k: keyof RepForm,
-    v: string
-  ) => setter((p) => ({ ...p, [k]: v }));
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -157,71 +220,6 @@ export function InscripcionForm({ token }: Props) {
       </div>
     );
   }
-
-  const inputCls = "w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent";
-  const labelCls = "block text-sm font-medium text-gray-700 mb-1";
-  const sectionCls = "bg-white rounded-xl shadow-sm border border-gray-200 p-5 md:p-6";
-
-  const RepFields = ({
-    rep,
-    setter,
-    title,
-  }: {
-    rep: RepForm;
-    setter: React.Dispatch<React.SetStateAction<RepForm>>;
-    title: string;
-  }) => (
-    <div className="space-y-4">
-      <h3 className="font-semibold text-gray-800">{title}</h3>
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div className="md:col-span-2">
-          <label className={labelCls}>Apellidos y Nombres *</label>
-          <input className={inputCls} value={rep.apellidosNombres}
-            onChange={(e) => setRepField(setter, "apellidosNombres", e.target.value)}
-            placeholder="Apellido Apellido, Nombre Nombre" />
-        </div>
-        <div>
-          <label className={labelCls}>Cédula de Identidad</label>
-          <input className={inputCls} value={rep.cedula}
-            onChange={(e) => setRepField(setter, "cedula", e.target.value)}
-            placeholder="V-12345678" />
-        </div>
-        <div>
-          <label className={labelCls}>Edad</label>
-          <input className={inputCls} type="number" min="18" max="99" value={rep.edad}
-            onChange={(e) => setRepField(setter, "edad", e.target.value)} />
-        </div>
-        <div>
-          <label className={labelCls}>Teléfono Habitación</label>
-          <input className={inputCls} value={rep.telefonoHab}
-            onChange={(e) => setRepField(setter, "telefonoHab", e.target.value)}
-            placeholder="0212-0000000" />
-        </div>
-        <div>
-          <label className={labelCls}>Teléfono Celular</label>
-          <input className={inputCls} value={rep.telefonoCelular}
-            onChange={(e) => setRepField(setter, "telefonoCelular", e.target.value)}
-            placeholder="0414-0000000" />
-        </div>
-        <div>
-          <label className={labelCls}>Teléfono Oficina</label>
-          <input className={inputCls} value={rep.telefonoOficina}
-            onChange={(e) => setRepField(setter, "telefonoOficina", e.target.value)} />
-        </div>
-        <div>
-          <label className={labelCls}>Ocupación</label>
-          <input className={inputCls} value={rep.ocupacion}
-            onChange={(e) => setRepField(setter, "ocupacion", e.target.value)} />
-        </div>
-        <div className="md:col-span-2">
-          <label className={labelCls}>Correo Electrónico</label>
-          <input className={inputCls} type="email" value={rep.email}
-            onChange={(e) => setRepField(setter, "email", e.target.value)}
-            placeholder="ejemplo@correo.com" />
-        </div>
-      </div>
-    </div>
-  );
 
   return (
     <form onSubmit={handleSubmit} className="space-y-6">

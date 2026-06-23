@@ -2,10 +2,48 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { Download } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { formatUSD, formatBS, formatFecha, FORMA_PAGO_LABELS } from "@/lib/utils";
 import type { EgresoConDetalle } from "./actions";
+
+function exportarCSV(egresos: EgresoConDetalle[]) {
+  const headers = [
+    "Fecha",
+    "Categoría",
+    "Descripción",
+    "Proveedor",
+    "Monto USD",
+    "Monto Bs",
+    "Forma de Pago",
+  ];
+  const rows = egresos.map((e) => [
+    formatFecha(e.fecha),
+    e.categoria,
+    e.descripcion ?? (e.docenteNombre ? `Nómina — ${e.docenteNombre}` : ""),
+    e.proveedor ?? "",
+    e.montoUsd != null ? Number(e.montoUsd).toFixed(2) : "",
+    e.montoBs != null ? Number(e.montoBs).toFixed(4) : "",
+    e.formaPago ? (FORMA_PAGO_LABELS[e.formaPago] ?? e.formaPago) : "",
+  ]);
+
+  const csv = [headers, ...rows]
+    .map((row) =>
+      row.map((cell) => `"${String(cell ?? "").replace(/"/g, '""')}"`).join(",")
+    )
+    .join("\r\n");
+
+  const blob = new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `egresos-${new Date().toISOString().slice(0, 7)}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
 
 interface Props {
   egresos: EgresoConDetalle[];
@@ -26,13 +64,25 @@ export function EgresosTable({ egresos }: Props) {
           Detalle de Egresos{" "}
           <span className="text-gray-400 font-normal">({egresos.length})</span>
         </h3>
-        <input
-          type="text"
-          placeholder="Buscar..."
-          value={busqueda}
-          onChange={(e) => setBusqueda(e.target.value)}
-          className="border border-gray-200 rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 w-52"
-        />
+        <div className="flex items-center gap-2">
+          <input
+            type="text"
+            placeholder="Buscar..."
+            value={busqueda}
+            onChange={(e) => setBusqueda(e.target.value)}
+            className="border border-gray-200 rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 w-44"
+          />
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => exportarCSV(filtrados)}
+            disabled={filtrados.length === 0}
+            title="Exportar como CSV"
+          >
+            <Download className="h-3.5 w-3.5 mr-1" />
+            CSV
+          </Button>
+        </div>
       </div>
 
       {filtrados.length === 0 ? (

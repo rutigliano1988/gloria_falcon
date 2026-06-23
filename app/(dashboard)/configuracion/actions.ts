@@ -4,6 +4,8 @@ import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import type { Prisma } from "@prisma/client";
+import { requireAdmin } from "@/lib/auth";
+import { registrarAudit } from "@/lib/audit";
 
 // ─── Año Escolar ─────────────────────────────────────────────────────────────
 
@@ -17,6 +19,7 @@ const anoEscolarSchema = z.object({
 });
 
 export async function crearAnoEscolar(data: z.infer<typeof anoEscolarSchema>) {
+  await requireAdmin();
   const parsed = anoEscolarSchema.parse(data);
 
   await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
@@ -38,10 +41,18 @@ export async function crearAnoEscolar(data: z.infer<typeof anoEscolarSchema>) {
 }
 
 export async function activarAnoEscolar(id: string) {
+  await requireAdmin();
+  const ano = await prisma.anoEscolar.findUnique({ where: { id }, select: { nombre: true } });
   await prisma.$transaction([
     prisma.anoEscolar.updateMany({ where: {}, data: { activo: false } }),
     prisma.anoEscolar.update({ where: { id }, data: { activo: true } }),
   ]);
+  await registrarAudit({
+    accion: "ANO_ESCOLAR_ACTIVADO",
+    entidad: "AnoEscolar",
+    entidadId: id,
+    meta: { nombre: ano?.nombre },
+  });
   revalidatePath("/configuracion");
   revalidatePath("/dashboard");
 }
@@ -83,12 +94,19 @@ const tasaSchema = z.object({
 });
 
 export async function registrarTasa(data: z.infer<typeof tasaSchema>) {
+  await requireAdmin();
   const parsed = tasaSchema.parse(data);
-  await prisma.tasaCambio.create({
+  const tasa = await prisma.tasaCambio.create({
     data: {
       tasa: parsed.tasa,
       fechaRegistro: new Date(),
     },
+  });
+  await registrarAudit({
+    accion: "TASA_REGISTRADA",
+    entidad: "TasaCambio",
+    entidadId: tasa.id,
+    meta: { tasa: parsed.tasa },
   });
   revalidatePath("/configuracion");
 }

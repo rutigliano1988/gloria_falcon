@@ -11,6 +11,17 @@ import { Plus, CheckCircle } from "lucide-react";
 import { formatFecha, parsePrismaError } from "@/lib/utils";
 import { crearAnoEscolar, activarAnoEscolar } from "./actions";
 import { useToast } from "@/hooks/use-toast";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import type { AnoEscolar, Lapso } from "@prisma/client";
 
 type AnoConLapsos = AnoEscolar & { lapsos: Lapso[] };
@@ -144,9 +155,30 @@ export function AnoEscolarSection({ anos }: { anos: AnoConLapsos[] }) {
                   </div>
                 </div>
                 {!ano.activo && (
-                  <Button variant="outline" size="sm" onClick={() => handleActivar(ano.id)}>
-                    <CheckCircle className="mr-1 h-3.5 w-3.5" /> Activar
-                  </Button>
+                  <AlertDialog>
+                    <AlertDialogTrigger asChild>
+                      <Button variant="outline" size="sm">
+                        <CheckCircle className="mr-1 h-3.5 w-3.5" /> Activar
+                      </Button>
+                    </AlertDialogTrigger>
+                    <AlertDialogContent>
+                      <AlertDialogHeader>
+                        <AlertDialogTitle>
+                          ¿Activar año escolar {ano.nombre}?
+                        </AlertDialogTitle>
+                        <AlertDialogDescription>
+                          Esto desactivará el año escolar actualmente activo. Todas las
+                          operaciones del sistema usarán el año <strong>{ano.nombre}</strong>.
+                        </AlertDialogDescription>
+                      </AlertDialogHeader>
+                      <AlertDialogFooter>
+                        <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                        <AlertDialogAction onClick={() => handleActivar(ano.id)}>
+                          Activar año escolar
+                        </AlertDialogAction>
+                      </AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
                 )}
               </div>
             ))}

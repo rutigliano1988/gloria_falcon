@@ -6,6 +6,7 @@ import { getContabilidadData } from "./actions";
 import { ResumenContable } from "./ResumenContable";
 import { EgresosTable } from "./EgresosTable";
 import { formatUSD, MESES } from "@/lib/utils";
+import { TasaStaleAlert } from "@/components/TasaStaleAlert";
 
 export const dynamic = "force-dynamic";
 
@@ -30,6 +31,8 @@ export default async function ContabilidadPage({
 
   return (
     <div className="space-y-5">
+      <TasaStaleAlert />
+
       {/* Encabezado */}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>

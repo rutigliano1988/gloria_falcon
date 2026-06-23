@@ -39,11 +39,11 @@ export async function getContabilidadData(mes?: number, ano?: number) {
 
   const [pagos, egresos, tasaActual] = await Promise.all([
     prisma.pago.findMany({
-      where: { fechaPago: { gte: inicio, lte: fin } },
+      where: { fechaPago: { gte: inicio, lte: fin }, deletedAt: null },
       orderBy: { fechaPago: "desc" },
     }),
     prisma.egreso.findMany({
-      where: { fecha: { gte: inicio, lte: fin } },
+      where: { fecha: { gte: inicio, lte: fin }, deletedAt: null },
       orderBy: { fecha: "desc" },
       include: {
         categoriaEgreso: true,

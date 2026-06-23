@@ -1,6 +1,8 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextRequest, NextResponse } from "next/server";
 
+const ADMIN_PATHS = ["/configuracion", "/admin"];
+
 export async function proxy(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request });
 
@@ -50,6 +52,15 @@ export async function proxy(request: NextRequest) {
 
   if (user && isLoginPage) {
     return NextResponse.redirect(new URL("/dashboard", request.url));
+  }
+
+  // Rutas solo para ADMIN — usuarios sin rol explícito se tratan como ADMIN
+  // (retrocompatibilidad: los usuarios existentes no tienen rol seteado aún)
+  if (user) {
+    const rol = user.app_metadata?.rol ?? "ADMIN";
+    if (ADMIN_PATHS.some((p) => pathname.startsWith(p)) && rol !== "ADMIN") {
+      return NextResponse.redirect(new URL("/dashboard", request.url));
+    }
   }
 
   return supabaseResponse;

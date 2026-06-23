@@ -57,6 +57,7 @@ export async function getVentasData(tipo?: string) {
       tipo: tipoFiltro
         ? (tipoFiltro as "VENTA" | "INGRESO_MANUAL")
         : { in: ["VENTA", "INGRESO_MANUAL"] },
+      deletedAt: null,
     },
     orderBy: { fechaPago: "desc" },
     take: 100,

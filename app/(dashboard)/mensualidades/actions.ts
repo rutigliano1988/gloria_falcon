@@ -98,7 +98,7 @@ export async function getMensualidadesData(mesAno?: string, anoEscolarId?: strin
     ? await prisma.conceptoPago.findMany({
         where: {
           mesAno: { in: mesesPasados },
-          pago: { alumnoId: { in: alumnoIds }, tipo: "MENSUALIDAD" },
+          pago: { alumnoId: { in: alumnoIds }, tipo: "MENSUALIDAD", deletedAt: null },
         },
         include: { pago: { select: { alumnoId: true } } },
       })
@@ -166,7 +166,7 @@ export async function getMensualidadesData(mesAno?: string, anoEscolarId?: strin
 
   // Historial reciente
   const pagosDB = await prisma.pago.findMany({
-    where: { tipo: "MENSUALIDAD", anoEscolarId: anoActivo.id },
+    where: { tipo: "MENSUALIDAD", anoEscolarId: anoActivo.id, deletedAt: null },
     orderBy: { fechaPago: "desc" },
     take: 50,
     include: { alumno: true, conceptos: true },

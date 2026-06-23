@@ -4,6 +4,8 @@ import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import type { Prisma } from "@prisma/client";
+import { registrarAudit } from "@/lib/audit";
+import { ALUMNOS_POR_PAGINA } from "./constants";
 
 // ─── Schemas ─────────────────────────────────────────────────────────────────
 
@@ -206,7 +208,21 @@ export async function reinscribirAlumno(data: z.infer<typeof reinscripcionSchema
 // ─── Actualizar estado alumno ─────────────────────────────────────────────────
 
 export async function cambiarEstadoAlumno(id: string, estado: "ACTIVO" | "RETIRADO" | "EGRESADO") {
+  const alumno = await prisma.alumno.findUnique({
+    where: { id },
+    select: { estado: true, primerNombre: true, primerApellido: true },
+  });
   await prisma.alumno.update({ where: { id }, data: { estado } });
+  await registrarAudit({
+    accion: "ALUMNO_ESTADO_CAMBIADO",
+    entidad: "Alumno",
+    entidadId: id,
+    meta: {
+      estadoAnterior: alumno?.estado,
+      estadoNuevo: estado,
+      nombre: `${alumno?.primerApellido} ${alumno?.primerNombre}`,
+    },
+  });
   revalidatePath("/alumnos");
   revalidatePath(`/alumnos/${id}`);
 }
@@ -216,33 +232,42 @@ export async function cambiarEstadoAlumno(id: string, estado: "ACTIVO" | "RETIRA
 const ESTADOS_VALIDOS = ["ACTIVO", "RETIRADO", "EGRESADO"] as const;
 type EstadoAlumnoEnum = (typeof ESTADOS_VALIDOS)[number];
 
-export async function getAlumnos(query?: string, estado?: string) {
+export async function getAlumnos(query?: string, estado?: string, pagina: number = 1) {
   const estadoFiltro = ESTADOS_VALIDOS.includes(estado as EstadoAlumnoEnum)
     ? (estado as EstadoAlumnoEnum)
     : undefined;
 
-  return prisma.alumno.findMany({
-    where: {
-      estado: estadoFiltro,
-      OR: query
-        ? [
-            { primerApellido: { contains: query, mode: "insensitive" } },
-            { primerNombre: { contains: query, mode: "insensitive" } },
-            { segundoApellido: { contains: query, mode: "insensitive" } },
-            { segundoNombre: { contains: query, mode: "insensitive" } },
-            { cedulaEscolar: { contains: query, mode: "insensitive" } },
-          ]
-        : undefined,
-    },
-    include: {
-      inscripciones: {
-        orderBy: { fechaInscripcion: "desc" },
-        take: 1,
-        include: { grado: true, seccion: true, anoEscolar: true },
+  const where = {
+    estado: estadoFiltro,
+    OR: query
+      ? [
+          { primerApellido: { contains: query, mode: "insensitive" as const } },
+          { primerNombre: { contains: query, mode: "insensitive" as const } },
+          { segundoApellido: { contains: query, mode: "insensitive" as const } },
+          { segundoNombre: { contains: query, mode: "insensitive" as const } },
+          { cedulaEscolar: { contains: query, mode: "insensitive" as const } },
+        ]
+      : undefined,
+  };
+
+  const [alumnos, total] = await Promise.all([
+    prisma.alumno.findMany({
+      where,
+      include: {
+        inscripciones: {
+          orderBy: { fechaInscripcion: "desc" },
+          take: 1,
+          include: { grado: true, seccion: true, anoEscolar: true },
+        },
       },
-    },
-    orderBy: [{ primerApellido: "asc" }, { primerNombre: "asc" }],
-  });
+      orderBy: [{ primerApellido: "asc" }, { primerNombre: "asc" }],
+      skip: (pagina - 1) * ALUMNOS_POR_PAGINA,
+      take: ALUMNOS_POR_PAGINA,
+    }),
+    prisma.alumno.count({ where }),
+  ]);
+
+  return { alumnos, total, pagina, totalPaginas: Math.ceil(total / ALUMNOS_POR_PAGINA) };
 }
 
 export async function getAlumnoById(id: string) {

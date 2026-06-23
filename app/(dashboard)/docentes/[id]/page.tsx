@@ -4,7 +4,8 @@ import { ArrowLeft, FileText, PenLine } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
-import { getDocenteById, toggleEstadoDocente } from "../actions";
+import { getDocenteById } from "../actions";
+import { ToggleEstadoDocente } from "./ToggleEstadoDocente";
 import { CARGO_DOCENTE_LABELS, FORMA_PAGO_LABELS, formatFecha, formatBS, MESES } from "@/lib/utils";
 
 export default async function DetalleDocentePage({
@@ -99,24 +100,11 @@ export default async function DetalleDocentePage({
         <Separator className="my-4" />
 
         {/* Toggle estado */}
-        <form
-          action={async () => {
-            "use server";
-            const nuevoEstado = docente.estado === "ACTIVO" ? "INACTIVO" : "ACTIVO";
-            await toggleEstadoDocente(docente.id, nuevoEstado);
-          }}
-        >
-          <button
-            type="submit"
-            className={`text-xs px-3 py-1.5 rounded-md border transition-colors ${
-              docente.estado === "ACTIVO"
-                ? "border-red-200 text-red-600 hover:bg-red-50"
-                : "border-green-200 text-green-600 hover:bg-green-50"
-            }`}
-          >
-            {docente.estado === "ACTIVO" ? "Marcar como Inactivo" : "Reactivar Docente"}
-          </button>
-        </form>
+        <ToggleEstadoDocente
+          docenteId={docente.id}
+          estadoActual={docente.estado as "ACTIVO" | "INACTIVO"}
+          nombre={nombre}
+        />
       </div>
 
       {/* Historial de nómina */}

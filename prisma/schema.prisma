@@ -298,7 +298,8 @@ model Pago {
   numeroReferencia String?
   fechaPago        DateTime   @default(now())
   observaciones    String?
-  numeroRecibo     String?  @unique
+  numeroRecibo     String?    @unique
+  deletedAt        DateTime?
 
   alumno     Alumno?     @relation(fields: [alumnoId], references: [id])
   anoEscolar AnoEscolar? @relation(fields: [anoEscolarId], references: [id])
@@ -335,6 +336,7 @@ model PagoDocente {
   numeroReferencia  String?
   fechaPago         DateTime  @default(now())
   totalBs           Decimal   @db.Decimal(14, 2)
+  deletedAt         DateTime?
 
   docente    Docente     @relation(fields: [docenteId], references: [id])
   tasaCambio TasaCambio? @relation(fields: [tasaCambioId], references: [id])
@@ -355,6 +357,7 @@ model Egreso {
   numeroFactura     String?
   fecha             DateTime   @default(now())
   pagoDocenteId     String?
+  deletedAt         DateTime?
 
   categoriaEgreso CategoriaEgreso @relation(fields: [categoriaEgresoId], references: [id])
   tasaCambio      TasaCambio?     @relation(fields: [tasaCambioId], references: [id])
@@ -389,4 +392,21 @@ model Configuracion {
   valor Json
 
   @@map("configuracion")
+}
+
+// ─── Audit Log ────────────────────────────────────────────────────────────────
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  userId    String?
+  userEmail String?
+  accion    String
+  entidad   String?
+  entidadId String?
+  meta      Json?
+  creadoEn  DateTime @default(now())
+
+  @@index([creadoEn])
+  @@index([userId])
+  @@map("audit_logs")
 }

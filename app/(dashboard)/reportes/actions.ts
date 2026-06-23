@@ -37,7 +37,7 @@ export async function getEstadoCuentaAlumno(alumnoId: string) {
       },
     }),
     prisma.pago.findMany({
-      where: { alumnoId },
+      where: { alumnoId, deletedAt: null },
       orderBy: { fechaPago: "desc" },
       include: {
         conceptos: { orderBy: { concepto: "asc" } },

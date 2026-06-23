@@ -4,6 +4,14 @@ import { Badge } from "@/components/ui/badge";
 import { Users, TrendingUp, TrendingDown, AlertCircle } from "lucide-react";
 import { formatUSD } from "@/lib/utils";
 import Link from "next/link";
+import { TasaStaleAlert } from "@/components/TasaStaleAlert";
+import { BalanceChart } from "@/components/BalanceChart";
+import type { BalanceDataPoint } from "@/components/BalanceChart";
+
+const MESES_CORTO = [
+  "Ene", "Feb", "Mar", "Abr", "May", "Jun",
+  "Jul", "Ago", "Sep", "Oct", "Nov", "Dic",
+];
 
 async function getDashboardData() {
   const [
@@ -47,11 +55,43 @@ async function getDashboardData() {
   };
 }
 
+async function getUltimos6MesesData(): Promise<BalanceDataPoint[]> {
+  const hoy = new Date();
+  return Promise.all(
+    Array.from({ length: 6 }, (_, i) => {
+      const d = new Date(hoy.getFullYear(), hoy.getMonth() - (5 - i), 1);
+      const inicio = new Date(d.getFullYear(), d.getMonth(), 1);
+      const fin = new Date(d.getFullYear(), d.getMonth() + 1, 0, 23, 59, 59);
+      const label = `${MESES_CORTO[d.getMonth()]} ${String(d.getFullYear()).slice(-2)}`;
+
+      return Promise.all([
+        prisma.pago.aggregate({
+          where: { fechaPago: { gte: inicio, lte: fin }, deletedAt: null },
+          _sum: { montoUsd: true },
+        }),
+        prisma.egreso.aggregate({
+          where: { fecha: { gte: inicio, lte: fin }, deletedAt: null },
+          _sum: { montoUsd: true },
+        }),
+      ]).then(([ing, egr]) => ({
+        mes: label,
+        ingresos: Number(ing._sum.montoUsd ?? 0),
+        egresos: Number(egr._sum.montoUsd ?? 0),
+      }));
+    })
+  );
+}
+
 export default async function DashboardPage() {
-  const data = await getDashboardData();
+  const [data, chartData] = await Promise.all([
+    getDashboardData(),
+    getUltimos6MesesData(),
+  ]);
 
   return (
     <div className="space-y-6">
+      <TasaStaleAlert />
+
       {/* Stats */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <Card>
@@ -99,6 +139,16 @@ export default async function DashboardPage() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Trend chart */}
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-base">Ingresos vs Egresos — Últimos 6 meses</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <BalanceChart data={chartData} />
+        </CardContent>
+      </Card>
 
       {/* Año escolar activo */}
       <Card>

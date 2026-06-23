@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import type { Prisma } from "@prisma/client";
 import { MESES } from "@/lib/utils";
+import { registrarAudit } from "@/lib/audit";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -154,7 +155,21 @@ export async function actualizarDocente(id: string, data: DocenteFormData) {
 // ─── Cambiar estado ────────────────────────────────────────────────────────────
 
 export async function toggleEstadoDocente(id: string, estado: "ACTIVO" | "INACTIVO") {
+  const docente = await prisma.docente.findUnique({
+    where: { id },
+    select: { estado: true, primerNombre: true, primerApellido: true },
+  });
   await prisma.docente.update({ where: { id }, data: { estado } });
+  await registrarAudit({
+    accion: "DOCENTE_ESTADO_CAMBIADO",
+    entidad: "Docente",
+    entidadId: id,
+    meta: {
+      estadoAnterior: docente?.estado,
+      estadoNuevo: estado,
+      nombre: `${docente?.primerApellido} ${docente?.primerNombre}`,
+    },
+  });
   revalidatePath("/docentes");
   revalidatePath(`/docentes/${id}`);
 }

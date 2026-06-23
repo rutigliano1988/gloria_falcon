@@ -12,27 +12,32 @@ import {
   FileText,
   Settings,
   LogOut,
+  ShieldCheck,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { signOut } from "@/app/(auth)/login/actions";
+import type { Rol } from "@/lib/auth";
 
-const navItems = [
-  { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/alumnos", label: "Alumnos", icon: Users },
-  { href: "/mensualidades", label: "Mensualidades", icon: DollarSign },
-  { href: "/ventas", label: "Ventas e Ingresos", icon: ShoppingCart },
-  { href: "/docentes", label: "Docentes y Nómina", icon: GraduationCap },
-  { href: "/contabilidad", label: "Contabilidad", icon: BookOpen },
-  { href: "/reportes", label: "Reportes", icon: FileText },
-  { href: "/configuracion", label: "Configuración", icon: Settings },
+const NAV_ITEMS = [
+  { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard, roles: ["ADMIN", "SECRETARIA"] as Rol[] },
+  { href: "/alumnos", label: "Alumnos", icon: Users, roles: ["ADMIN", "SECRETARIA"] as Rol[] },
+  { href: "/mensualidades", label: "Mensualidades", icon: DollarSign, roles: ["ADMIN", "SECRETARIA"] as Rol[] },
+  { href: "/ventas", label: "Ventas e Ingresos", icon: ShoppingCart, roles: ["ADMIN", "SECRETARIA"] as Rol[] },
+  { href: "/docentes", label: "Docentes y Nómina", icon: GraduationCap, roles: ["ADMIN", "SECRETARIA"] as Rol[] },
+  { href: "/contabilidad", label: "Contabilidad", icon: BookOpen, roles: ["ADMIN", "SECRETARIA"] as Rol[] },
+  { href: "/reportes", label: "Reportes", icon: FileText, roles: ["ADMIN", "SECRETARIA"] as Rol[] },
+  { href: "/configuracion", label: "Configuración", icon: Settings, roles: ["ADMIN"] as Rol[] },
+  { href: "/admin/usuarios", label: "Usuarios", icon: ShieldCheck, roles: ["ADMIN"] as Rol[] },
 ];
 
 interface SidebarProps {
   userEmail: string;
+  rol: Rol;
 }
 
-export function Sidebar({ userEmail }: SidebarProps) {
+export function Sidebar({ userEmail, rol }: SidebarProps) {
   const pathname = usePathname();
+  const visibleItems = NAV_ITEMS.filter((item) => item.roles.includes(rol));
 
   return (
     <aside className="flex h-full w-64 flex-col bg-[hsl(var(--sidebar))] text-[hsl(var(--sidebar-foreground))]">
@@ -50,7 +55,7 @@ export function Sidebar({ userEmail }: SidebarProps) {
       {/* Nav */}
       <nav className="flex-1 overflow-y-auto py-4">
         <ul className="space-y-0.5 px-2">
-          {navItems.map(({ href, label, icon: Icon }) => {
+          {visibleItems.map(({ href, label, icon: Icon }) => {
             const active = pathname === href || pathname.startsWith(href + "/");
             return (
               <li key={href}>

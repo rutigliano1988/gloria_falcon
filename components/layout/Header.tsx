@@ -2,7 +2,7 @@
 
 import { usePathname } from "next/navigation";
 import Link from "next/link";
-import { ChevronRight } from "lucide-react";
+import { ChevronRight, Menu } from "lucide-react";
 
 const SECTION_TITLES: Record<string, string> = {
   dashboard: "Dashboard",
@@ -23,9 +23,14 @@ const SUB_LABELS: Record<string, string> = {
   "nuevo-egreso": "Nuevo egreso",
   importar: "Importar",
   usuarios: "Usuarios",
+  solicitudes: "Solicitudes",
 };
 
-export function Header() {
+interface HeaderProps {
+  onMenuClick?: () => void;
+}
+
+export function Header({ onMenuClick }: HeaderProps) {
   const pathname = usePathname();
   const segments = pathname.split("/").filter(Boolean);
 
@@ -35,7 +40,16 @@ export function Header() {
     segments.length > 1 ? (SUB_LABELS[segments[1]] ?? "Detalle") : null;
 
   return (
-    <header className="flex h-14 items-center border-b bg-white px-6">
+    <header className="flex h-14 items-center border-b bg-white px-4 lg:px-6">
+      {/* Hamburger — solo visible en mobile/tablet */}
+      <button
+        onClick={onMenuClick}
+        className="mr-3 rounded-md p-1.5 text-muted-foreground hover:bg-gray-100 transition-colors lg:hidden"
+        aria-label="Abrir menú"
+      >
+        <Menu className="h-5 w-5" />
+      </button>
+
       {subLabel ? (
         <nav className="flex items-center gap-1 text-sm" aria-label="Breadcrumb">
           <Link

@@ -172,6 +172,7 @@ model AnoEscolar {
   lapsos        Lapso[]
   inscripciones Inscripcion[]
   pagos         Pago[]
+  solicitudes   SolicitudInscripcion[]
 
   @@map("anos_escolares")
 }
@@ -197,6 +198,7 @@ model Grado {
 
   secciones     Seccion[]
   inscripciones Inscripcion[]
+  solicitudes   SolicitudInscripcion[]
 
   @@map("grados")
 }
@@ -209,6 +211,7 @@ model Seccion {
 
   grado         Grado         @relation(fields: [gradoId], references: [id], onDelete: Cascade)
   inscripciones Inscripcion[]
+  solicitudes   SolicitudInscripcion[]
 
   @@unique([nombre, gradoId])
   @@map("secciones")
@@ -392,6 +395,58 @@ model Configuracion {
   valor Json
 
   @@map("configuracion")
+}
+
+// ─── Solicitudes de Inscripción ───────────────────────────────────────────────
+
+enum EstadoSolicitud {
+  PENDIENTE
+  EN_REVISION
+  APROBADA
+  RECHAZADA
+}
+
+model SolicitudInscripcion {
+  id                  String          @id @default(cuid())
+  token               String          @unique @default(cuid())
+  estado              EstadoSolicitud @default(PENDIENTE)
+
+  // Datos del alumno — llenados por el padre/representante
+  primerApellido      String?
+  segundoApellido     String?
+  primerNombre        String?
+  segundoNombre       String?
+  cedulaEscolar       String?
+  municipioNacimiento String?
+  estadoNacimiento    String?
+  sexo                Sexo?
+  fechaNacimiento     DateTime?       @db.Date
+  domicilio           String?
+  telefonoHogar       String?
+  procedencia         Procedencia?
+  nombrePlantelOrigen String?
+
+  // Datos relacionados en JSON
+  datosSalud          Json?
+  representantes      Json?
+  autorizados         Json?
+  contactosEmergencia Json?
+
+  // Completado por el personal al aprobar
+  anoEscolarId        String?
+  gradoId             String?
+  seccionId           String?
+  observaciones       String?
+
+  creadoEn            DateTime        @default(now())
+  actualizadoEn       DateTime        @updatedAt
+
+  anoEscolar          AnoEscolar?     @relation(fields: [anoEscolarId], references: [id])
+  grado               Grado?          @relation(fields: [gradoId], references: [id])
+  seccion             Seccion?        @relation(fields: [seccionId], references: [id])
+
+  @@index([estado])
+  @@map("solicitudes_inscripcion")
 }
 
 // ─── Audit Log ────────────────────────────────────────────────────────────────

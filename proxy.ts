@@ -45,9 +45,11 @@ export async function proxy(request: NextRequest) {
         headers: { "Content-Type": "application/json" },
       });
     }
-    if (!isLoginPage) {
-      return NextResponse.redirect(new URL("/login", request.url));
+    // Rutas públicas — no requieren autenticación
+    if (isLoginPage || pathname.startsWith("/inscripcion/")) {
+      return supabaseResponse;
     }
+    return NextResponse.redirect(new URL("/login", request.url));
   }
 
   if (user && isLoginPage) {

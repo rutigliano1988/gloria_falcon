@@ -7,14 +7,13 @@ import { registrarAudit } from "@/lib/audit";
 import { redirect } from "next/navigation";
 import type { Prisma } from "@prisma/client";
 
-export async function generarEnlaceSolicitud(): Promise<{ token: string }> {
+export async function generarEnlaceSolicitud(): Promise<void> {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
-  const solicitud = await prisma.solicitudInscripcion.create({ data: {} });
+  await prisma.solicitudInscripcion.create({ data: {} });
   revalidatePath("/alumnos/solicitudes");
-  return { token: solicitud.token };
 }
 
 export async function getSolicitudes() {

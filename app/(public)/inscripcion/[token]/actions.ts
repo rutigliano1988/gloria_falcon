@@ -95,7 +95,7 @@ export async function enviarSolicitud(
       representantes: d.representantes as Prisma.InputJsonValue,
       autorizados: d.autorizados as Prisma.InputJsonValue,
       contactosEmergencia: d.contactosEmergencia as Prisma.InputJsonValue,
-      datosSalud: (d.datosSalud ?? null) as Prisma.InputJsonValue | null,
+      datosSalud: d.datosSalud != null ? (d.datosSalud as Prisma.InputJsonValue) : Prisma.DbNull,
     },
   });
 

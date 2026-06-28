@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
+import { DatePicker } from "@/components/ui/date-picker";
 import { useToast } from "@/hooks/use-toast";
 import { formatBS, calcularBs, FORMA_PAGO_LABELS, MESES, parsePrismaError } from "@/lib/utils";
 import { registrarPagoNomina } from "../../actions";
@@ -141,12 +142,7 @@ export function NominaForm({ docentes, tasaActual, docenteIdInicial }: Props) {
           </div>
           <div>
             <label className="block text-xs font-medium text-gray-600 mb-1.5">Fecha de pago</label>
-            <input
-              type="date"
-              value={fechaPago}
-              onChange={(e) => setFechaPago(e.target.value)}
-              className="w-full border border-gray-200 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
+            <DatePicker value={fechaPago} onChange={setFechaPago} />
           </div>
         </div>
       </div>

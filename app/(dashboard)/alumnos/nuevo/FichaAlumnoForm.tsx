@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { DatePicker } from "@/components/ui/date-picker";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -241,7 +242,7 @@ export function FichaAlumnoForm({ grados, anos }: Props) {
             </div>
             <div>
               <Label>Fecha de Nacimiento * <span className="text-xs font-normal text-muted-foreground">(dd/mm/aaaa)</span></Label>
-              <Input type="date" {...f("fechaNacimiento")} />
+              <DatePicker value={form.fechaNacimiento} onChange={(v) => setForm({ ...form, fechaNacimiento: v })} />
               {edad !== null && (
                 <p className="text-xs text-muted-foreground mt-1">Edad: {edad} años</p>
               )}

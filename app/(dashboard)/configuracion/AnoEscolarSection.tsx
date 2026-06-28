@@ -11,6 +11,7 @@ import { Plus, CheckCircle } from "lucide-react";
 import { formatFecha, parsePrismaError } from "@/lib/utils";
 import { crearAnoEscolar, activarAnoEscolar } from "./actions";
 import { useToast } from "@/hooks/use-toast";
+import { DatePicker } from "@/components/ui/date-picker";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -101,24 +102,22 @@ export function AnoEscolarSection({ anos }: { anos: AnoConLapsos[] }) {
                     </div>
                     <div>
                       <Label className="text-xs">Inicio</Label>
-                      <Input
-                        type="date"
+                      <DatePicker
                         value={lapso.fechaInicio}
-                        onChange={(e) => {
+                        onChange={(v) => {
                           const copy = [...lapsos];
-                          copy[i] = { ...copy[i], fechaInicio: e.target.value };
+                          copy[i] = { ...copy[i], fechaInicio: v };
                           setLapsos(copy);
                         }}
                       />
                     </div>
                     <div>
                       <Label className="text-xs">Fin</Label>
-                      <Input
-                        type="date"
+                      <DatePicker
                         value={lapso.fechaFin}
-                        onChange={(e) => {
+                        onChange={(v) => {
                           const copy = [...lapsos];
-                          copy[i] = { ...copy[i], fechaFin: e.target.value };
+                          copy[i] = { ...copy[i], fechaFin: v };
                           setLapsos(copy);
                         }}
                       />

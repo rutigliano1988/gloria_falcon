@@ -78,11 +78,11 @@ export function FichaAlumnoForm({ grados, anos }: Props) {
   });
 
   const [madre, setMadre] = useState({
-    apellidosNombres: "", edad: "", cedula: "", telefonoHab: "",
+    apellidosNombres: "", fechaNacimiento: "", cedula: "", telefonoHab: "",
     telefonoCelular: "", ocupacion: "", telefonoOficina: "", email: "",
   });
   const [padre, setPadre] = useState({
-    apellidosNombres: "", edad: "", cedula: "", telefonoHab: "",
+    apellidosNombres: "", fechaNacimiento: "", cedula: "", telefonoHab: "",
     telefonoCelular: "", ocupacion: "", telefonoOficina: "", email: "",
   });
   const [contactos, setContactos] = useState([
@@ -92,6 +92,8 @@ export function FichaAlumnoForm({ grados, anos }: Props) {
 
   const gradoSeleccionado = grados.find((g) => g.id === form.gradoId);
   const edad = form.fechaNacimiento ? calcularEdad(new Date(form.fechaNacimiento)) : null;
+  const edadMadre = madre.fechaNacimiento ? calcularEdad(new Date(madre.fechaNacimiento)) : null;
+  const edadPadre = padre.fechaNacimiento ? calcularEdad(new Date(padre.fechaNacimiento)) : null;
 
   const toggleServicio = (valor: string) => {
     setServicios((prev) =>
@@ -104,14 +106,22 @@ export function FichaAlumnoForm({ grados, anos }: Props) {
       toast({ title: "Campos obligatorios", description: "Completa los campos marcados con *", variant: "destructive" });
       return;
     }
+    if (madre.apellidosNombres && !madre.fechaNacimiento) {
+      toast({ title: "Datos de la Madre incompletos", description: "Ingresa la fecha de nacimiento de la madre", variant: "destructive" });
+      return;
+    }
+    if (padre.apellidosNombres && !padre.fechaNacimiento) {
+      toast({ title: "Datos del Padre incompletos", description: "Ingresa la fecha de nacimiento del padre", variant: "destructive" });
+      return;
+    }
     setLoading(true);
     try {
       const data: AlumnoFormData = {
         ...form,
         sexo: form.sexo as "M" | "F",
         descuentoMontoUsd: form.descuentoMontoUsd ? parseFloat(form.descuentoMontoUsd) : null,
-        madre: madre.apellidosNombres ? { tipo: "MADRE", ...madre, edad: madre.edad ? parseInt(madre.edad) : null, email: madre.email || null } : null,
-        padre: padre.apellidosNombres ? { tipo: "PADRE", ...padre, edad: padre.edad ? parseInt(padre.edad) : null, email: padre.email || null } : null,
+        madre: madre.apellidosNombres ? { tipo: "MADRE", ...madre, email: madre.email || null } : null,
+        padre: padre.apellidosNombres ? { tipo: "PADRE", ...padre, email: padre.email || null } : null,
         contactos: contactos.filter((c) => c.nombre),
         servicios: servicios as ("ALMUERZO" | "RESGUARDO" | "TAE_KWON_DO")[],
         seccionId: form.seccionId || null,
@@ -297,25 +307,39 @@ export function FichaAlumnoForm({ grados, anos }: Props) {
       <Card>
         <CardHeader><CardTitle className="text-base">Datos de la Madre</CardTitle></CardHeader>
         <CardContent className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          {[
-            { key: "apellidosNombres", label: "Apellidos y Nombres", full: true },
-            { key: "cedula", label: "C.I." },
-            { key: "edad", label: "Edad" },
-            { key: "telefonoHab", label: "Teléfono de Habitación" },
-            { key: "telefonoCelular", label: "Teléfono Celular" },
-            { key: "ocupacion", label: "Ocupación" },
-            { key: "telefonoOficina", label: "Teléfono de Oficina" },
-            { key: "email", label: "Correo Electrónico" },
-          ].map(({ key, label, full }) => (
-            <div key={key} className={full ? "sm:col-span-2" : ""}>
-              <Label>{label}</Label>
-              <Input
-                value={madre[key as keyof typeof madre]}
-                onChange={(e) => setMadre({ ...madre, [key]: e.target.value })}
-                type={key === "email" ? "email" : key === "edad" ? "number" : "text"}
-              />
-            </div>
-          ))}
+          <div className="sm:col-span-2">
+            <Label>Apellidos y Nombres</Label>
+            <Input value={madre.apellidosNombres} onChange={(e) => setMadre({ ...madre, apellidosNombres: e.target.value })} />
+          </div>
+          <div>
+            <Label>C.I.</Label>
+            <Input value={madre.cedula} onChange={(e) => setMadre({ ...madre, cedula: e.target.value })} />
+          </div>
+          <div>
+            <Label>Fecha de Nacimiento {madre.apellidosNombres && <span className="text-destructive">*</span>}</Label>
+            <DatePicker value={madre.fechaNacimiento} onChange={(v) => setMadre({ ...madre, fechaNacimiento: v })} />
+            {edadMadre !== null && <p className="text-xs text-muted-foreground mt-1">Edad: {edadMadre} años</p>}
+          </div>
+          <div>
+            <Label>Teléfono de Habitación</Label>
+            <Input value={madre.telefonoHab} onChange={(e) => setMadre({ ...madre, telefonoHab: e.target.value })} />
+          </div>
+          <div>
+            <Label>Teléfono Celular</Label>
+            <Input value={madre.telefonoCelular} onChange={(e) => setMadre({ ...madre, telefonoCelular: e.target.value })} />
+          </div>
+          <div>
+            <Label>Ocupación</Label>
+            <Input value={madre.ocupacion} onChange={(e) => setMadre({ ...madre, ocupacion: e.target.value })} />
+          </div>
+          <div>
+            <Label>Teléfono de Oficina</Label>
+            <Input value={madre.telefonoOficina} onChange={(e) => setMadre({ ...madre, telefonoOficina: e.target.value })} />
+          </div>
+          <div>
+            <Label>Correo Electrónico</Label>
+            <Input type="email" value={madre.email} onChange={(e) => setMadre({ ...madre, email: e.target.value })} />
+          </div>
         </CardContent>
       </Card>
 
@@ -323,25 +347,39 @@ export function FichaAlumnoForm({ grados, anos }: Props) {
       <Card>
         <CardHeader><CardTitle className="text-base">Datos del Padre</CardTitle></CardHeader>
         <CardContent className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          {[
-            { key: "apellidosNombres", label: "Apellidos y Nombres", full: true },
-            { key: "cedula", label: "C.I." },
-            { key: "edad", label: "Edad" },
-            { key: "telefonoHab", label: "Teléfono de Habitación" },
-            { key: "telefonoCelular", label: "Teléfono Celular" },
-            { key: "ocupacion", label: "Ocupación" },
-            { key: "telefonoOficina", label: "Teléfono de Oficina" },
-            { key: "email", label: "Correo Electrónico" },
-          ].map(({ key, label, full }) => (
-            <div key={key} className={full ? "sm:col-span-2" : ""}>
-              <Label>{label}</Label>
-              <Input
-                value={padre[key as keyof typeof padre]}
-                onChange={(e) => setPadre({ ...padre, [key]: e.target.value })}
-                type={key === "email" ? "email" : key === "edad" ? "number" : "text"}
-              />
-            </div>
-          ))}
+          <div className="sm:col-span-2">
+            <Label>Apellidos y Nombres</Label>
+            <Input value={padre.apellidosNombres} onChange={(e) => setPadre({ ...padre, apellidosNombres: e.target.value })} />
+          </div>
+          <div>
+            <Label>C.I.</Label>
+            <Input value={padre.cedula} onChange={(e) => setPadre({ ...padre, cedula: e.target.value })} />
+          </div>
+          <div>
+            <Label>Fecha de Nacimiento {padre.apellidosNombres && <span className="text-destructive">*</span>}</Label>
+            <DatePicker value={padre.fechaNacimiento} onChange={(v) => setPadre({ ...padre, fechaNacimiento: v })} />
+            {edadPadre !== null && <p className="text-xs text-muted-foreground mt-1">Edad: {edadPadre} años</p>}
+          </div>
+          <div>
+            <Label>Teléfono de Habitación</Label>
+            <Input value={padre.telefonoHab} onChange={(e) => setPadre({ ...padre, telefonoHab: e.target.value })} />
+          </div>
+          <div>
+            <Label>Teléfono Celular</Label>
+            <Input value={padre.telefonoCelular} onChange={(e) => setPadre({ ...padre, telefonoCelular: e.target.value })} />
+          </div>
+          <div>
+            <Label>Ocupación</Label>
+            <Input value={padre.ocupacion} onChange={(e) => setPadre({ ...padre, ocupacion: e.target.value })} />
+          </div>
+          <div>
+            <Label>Teléfono de Oficina</Label>
+            <Input value={padre.telefonoOficina} onChange={(e) => setPadre({ ...padre, telefonoOficina: e.target.value })} />
+          </div>
+          <div>
+            <Label>Correo Electrónico</Label>
+            <Input type="email" value={padre.email} onChange={(e) => setPadre({ ...padre, email: e.target.value })} />
+          </div>
         </CardContent>
       </Card>
 

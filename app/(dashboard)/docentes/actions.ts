@@ -44,6 +44,7 @@ const docenteSchema = z.object({
   cargo: z.enum(["DOCENTE", "COORDINADOR", "DIRECTOR", "ADMINISTRATIVO", "OBRERO"]),
   gradosAsignados: z.string().optional().nullable(),
   estado: z.enum(["ACTIVO", "INACTIVO"]),
+  fechaNacimiento: z.string().min(1, "Obligatorio"),
   fechaIngreso: z.string().optional().nullable(),
 });
 
@@ -122,6 +123,7 @@ export async function crearDocente(data: DocenteFormData) {
       cargo: parsed.cargo,
       gradosAsignados: parsed.gradosAsignados || null,
       estado: parsed.estado,
+      fechaNacimiento: new Date(parsed.fechaNacimiento),
       fechaIngreso: parsed.fechaIngreso ? new Date(parsed.fechaIngreso) : null,
     },
   });
@@ -145,6 +147,7 @@ export async function actualizarDocente(id: string, data: DocenteFormData) {
       cargo: parsed.cargo,
       gradosAsignados: parsed.gradosAsignados || null,
       estado: parsed.estado,
+      fechaNacimiento: new Date(parsed.fechaNacimiento),
       fechaIngreso: parsed.fechaIngreso ? new Date(parsed.fechaIngreso) : null,
     },
   });

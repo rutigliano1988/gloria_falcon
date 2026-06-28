@@ -130,6 +130,8 @@ export default async function AlumnoDetallePage({ params }: { params: Promise<{ 
                 <dl className="grid grid-cols-2 gap-2 sm:grid-cols-3 text-sm">
                   <div className="col-span-2"><dt className="text-muted-foreground">Nombre</dt><dd className="font-medium">{rep.apellidosNombres}</dd></div>
                   <div><dt className="text-muted-foreground">C.I.</dt><dd>{rep.cedula ?? "—"}</dd></div>
+                  <div><dt className="text-muted-foreground">Fecha de nacimiento</dt><dd>{rep.fechaNacimiento ? formatFecha(rep.fechaNacimiento) : "—"}</dd></div>
+                  <div><dt className="text-muted-foreground">Edad</dt><dd>{rep.fechaNacimiento ? `${calcularEdad(new Date(rep.fechaNacimiento))} años` : "—"}</dd></div>
                   <div><dt className="text-muted-foreground">Teléfono celular</dt><dd>{rep.telefonoCelular ?? "—"}</dd></div>
                   <div><dt className="text-muted-foreground">Teléfono habitación</dt><dd>{rep.telefonoHab ?? "—"}</dd></div>
                   <div><dt className="text-muted-foreground">Ocupación</dt><dd>{rep.ocupacion ?? "—"}</dd></div>

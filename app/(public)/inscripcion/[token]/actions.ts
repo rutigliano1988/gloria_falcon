@@ -8,7 +8,7 @@ const representanteSchema = z.object({
   tipo: z.enum(["MADRE", "PADRE", "TUTOR"]),
   apellidosNombres: z.string().min(1, "Nombre del representante requerido"),
   cedula: z.string().optional().nullable(),
-  edad: z.coerce.number().optional().nullable(),
+  fechaNacimiento: z.string().optional().nullable(),
   telefonoHab: z.string().optional().nullable(),
   telefonoCelular: z.string().optional().nullable(),
   telefonoOficina: z.string().optional().nullable(),

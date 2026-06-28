@@ -4,9 +4,10 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
-import { CARGO_DOCENTE_LABELS, parsePrismaError } from "@/lib/utils";
+import { CARGO_DOCENTE_LABELS, calcularEdad, parsePrismaError } from "@/lib/utils";
 import { crearDocente, actualizarDocente } from "../actions";
 import type { DocenteFormData } from "../actions";
+import { DatePicker } from "@/components/ui/date-picker";
 
 interface DocenteInicial {
   id?: string;
@@ -20,6 +21,7 @@ interface DocenteInicial {
   cargo?: string;
   gradosAsignados?: string | null;
   estado?: string;
+  fechaNacimiento?: Date | null;
   fechaIngreso?: Date | null;
 }
 
@@ -42,13 +44,18 @@ export function DocenteForm({ docente }: Props) {
   const [cargo, setCargo] = useState(docente?.cargo ?? "DOCENTE");
   const [gradosAsignados, setGradosAsignados] = useState(docente?.gradosAsignados ?? "");
   const [estado, setEstado] = useState(docente?.estado ?? "ACTIVO");
+  const [fechaNacimiento, setFechaNacimiento] = useState(
+    docente?.fechaNacimiento ? new Date(docente.fechaNacimiento).toISOString().split("T")[0] : ""
+  );
   const [fechaIngreso, setFechaIngreso] = useState(
     docente?.fechaIngreso ? new Date(docente.fechaIngreso).toISOString().split("T")[0] : ""
   );
   const [loading, setLoading] = useState(false);
 
+  const edadDocente = fechaNacimiento ? calcularEdad(new Date(fechaNacimiento)) : null;
+
   const handleSubmit = async () => {
-    if (!primerApellido || !primerNombre || !cedula) {
+    if (!primerApellido || !primerNombre || !cedula || !fechaNacimiento) {
       toast({ title: "Completa los campos obligatorios", variant: "destructive" });
       return;
     }
@@ -64,6 +71,7 @@ export function DocenteForm({ docente }: Props) {
       cargo: cargo as DocenteFormData["cargo"],
       gradosAsignados: gradosAsignados || null,
       estado: estado as "ACTIVO" | "INACTIVO",
+      fechaNacimiento,
       fechaIngreso: fechaIngreso || null,
     };
 
@@ -122,6 +130,11 @@ export function DocenteForm({ docente }: Props) {
           {campo("Cédula", cedula, setCedula, { required: true, placeholder: "V-12345678" })}
           {campo("Teléfono", telefono, setTelefono, { placeholder: "0412-1234567" })}
           {campo("Correo Electrónico", email, setEmail, { type: "email", placeholder: "correo@ejemplo.com" })}
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1.5">Fecha de Nacimiento *</label>
+            <DatePicker value={fechaNacimiento} onChange={setFechaNacimiento} />
+            {edadDocente !== null && <p className="text-xs text-gray-400 mt-1">Edad: {edadDocente} años</p>}
+          </div>
           {campo("Fecha de Ingreso", fechaIngreso, setFechaIngreso, { type: "date" })}
         </div>
       </div>

@@ -94,7 +94,7 @@ export async function aprobarSolicitud(
             tipo: r.tipo as "MADRE" | "PADRE" | "TUTOR",
             apellidosNombres: String(r.apellidosNombres ?? ""),
             cedula: (r.cedula as string) ?? null,
-            edad: r.edad ? Number(r.edad) : null,
+            fechaNacimiento: r.fechaNacimiento ? new Date(r.fechaNacimiento as string) : null,
             telefonoHab: (r.telefonoHab as string) ?? null,
             telefonoCelular: (r.telefonoCelular as string) ?? null,
             telefonoOficina: (r.telefonoOficina as string) ?? null,

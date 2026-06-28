@@ -111,7 +111,7 @@ model Representante {
   alumnoId         String
   tipo             TipoRepresentante
   apellidosNombres String
-  edad             Int?
+  fechaNacimiento  DateTime?         @db.Date
   cedula           String?
   telefonoHab      String?
   telefonoCelular  String?
@@ -265,6 +265,7 @@ model Docente {
   cargo           CargoDocente  @default(DOCENTE)
   gradosAsignados String?
   estado          EstadoDocente @default(ACTIVO)
+  fechaNacimiento DateTime?     @db.Date
   fechaIngreso    DateTime?     @db.Date
   creadoEn        DateTime      @default(now())
 

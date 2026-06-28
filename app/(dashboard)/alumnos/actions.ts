@@ -12,7 +12,7 @@ import { ALUMNOS_POR_PAGINA } from "./constants";
 const representanteSchema = z.object({
   tipo: z.enum(["MADRE", "PADRE", "TUTOR"]),
   apellidosNombres: z.string().min(1),
-  edad: z.number().int().positive().optional().nullable(),
+  fechaNacimiento: z.string().optional().nullable(),
   cedula: z.string().optional().nullable(),
   telefonoHab: z.string().optional().nullable(),
   telefonoCelular: z.string().optional().nullable(),
@@ -102,10 +102,10 @@ export async function crearAlumno(data: AlumnoFormData) {
     // Representantes
     const reps = [];
     if (parsed.madre?.apellidosNombres) {
-      reps.push({ ...parsed.madre, email: parsed.madre.email || null, alumnoId: alumno.id, tipo: "MADRE" as const });
+      reps.push({ ...parsed.madre, email: parsed.madre.email || null, alumnoId: alumno.id, tipo: "MADRE" as const, fechaNacimiento: parsed.madre.fechaNacimiento ? new Date(parsed.madre.fechaNacimiento) : null });
     }
     if (parsed.padre?.apellidosNombres) {
-      reps.push({ ...parsed.padre, email: parsed.padre.email || null, alumnoId: alumno.id, tipo: "PADRE" as const });
+      reps.push({ ...parsed.padre, email: parsed.padre.email || null, alumnoId: alumno.id, tipo: "PADRE" as const, fechaNacimiento: parsed.padre.fechaNacimiento ? new Date(parsed.padre.fechaNacimiento) : null });
     }
     if (reps.length > 0) {
       await tx.representante.createMany({ data: reps });

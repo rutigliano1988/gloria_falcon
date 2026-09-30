@@ -5,13 +5,25 @@
 
 ## Resumen ejecutivo
 
-**Estado general:** es un MVP funcional y legible, con bases sanas: Prisma con consultas parametrizadas, zod, ningún punto de entrada para XSS y la service key solo en el servidor. Aun así, **no está listo para un piloto con datos reales de menores** hasta cerrar los 3 problemas críticos y los 5 altos. Los tres más graves:
+**Estado general:** es un MVP funcional y legible, con bases sanas: Prisma con consultas parametrizadas, zod, ningún punto de entrada para XSS y la service key solo en el servidor. Aun así, **no está listo para un piloto con datos reales de menores** hasta cerrar los 2 problemas críticos y los 6 altos (C3 pasó a Alto al confirmar que producción corre en Vercel). Los tres más graves:
 
 1. **Un usuario sin rol se trata como ADMIN** (`proxy.ts:62`, `lib/auth.ts:15`). Si el registro público de Supabase está activo (lo está por defecto) o falla una invitación, esa persona obtiene acceso total a fichas, datos de salud, pagos y usuarios.
 2. **Ninguna tabla tiene RLS** (no hay ni una política en `prisma/migrations/`). Si la Data API de Supabase expone el esquema `public` (lo habitual), basta la anon key para leer y escribir toda la base.
 3. **La autorización vive solo en `proxy.ts` y en la interfaz.** 44 de las 50 Server Actions del panel no verifican sesión ni rol. Hoy mismo una SECRETARIA puede aprobar o rechazar inscripciones, que solo están restringidas en pantalla. Además, `next@16.2.6` expone esos IDs de acción públicamente y arrastra avisos de seguridad críticos.
 
 Otros bloqueantes: las migraciones no coinciden con el esquema, los pagos no se validan en el servidor ni se pueden anular o auditar, y el dashboard deja la nómina fuera de los egresos.
+
+### Actualización tras tus respuestas y la verificación de Supabase
+
+- **Supabase (solo lectura), sin resultado concluyente.** El proyecto `gloria-falcon` (`ifnhauunhgkhosbnfaqq`) está **pausado (INACTIVE)**. El Security Advisor devolvió 0 avisos, pero con el proyecto pausado eso no prueba nada, y la consulta SQL de metadatos (`pg_class.relrowsecurity`) falló por timeout. Me detuve ahí: reactivarlo ya no sería una operación de solo lectura. C1 y C2 **siguen condicionados**. El único dato nuevo es la región: **`eu-west-1` (Irlanda)**.
+- **Marco legal (colegio en Venezuela, soporte desde España).** Tú probablemente actúas como *encargado del tratamiento* con establecimiento en la UE, y la base está alojada en Irlanda. Eso hace muy probable que el RGPD te aplique (art. 3.1), además de la normativa venezolana (LOPNNA art. 65; Constitución arts. 28 y 60) para el colegio como responsable. No es asesoría legal. Esto refuerza **A5** y agrega trabajo:
+  - un contrato de encargo con el colegio (art. 28 RGPD);
+  - un registro de actividades de tratamiento (art. 30);
+  - las medidas de seguridad del art. 32, entre ellas cerrar C1, C2 y A1;
+  - un procedimiento para avisar al colegio de una brecha (art. 33);
+  - una lista de subencargados: Supabase (UE) y Vercel. Las funciones de Vercel corren por defecto en EE. UU. (`iad1`); el repo no fija región (no hay `vercel.json` ni `preferredRegion`). Conviene fijar una región UE y revisar el DPA de Vercel.
+- **Rol SECRETARIA: ve contabilidad y salud, pero no la nómina.** M16 pasa a ser un requisito concreto (ver M16). **Ojo:** no basta con bloquear `/docentes/nomina`. Contabilidad lista cada egreso de nómina con el nombre del docente y el monto (`app/(dashboard)/contabilidad/EgresosTable.tsx:24,124`), lo exporta a CSV y enlaza a "Ver nómina" (`:152-155`). La descripción que se guarda ya incluye el nombre (`app/(dashboard)/docentes/actions.ts:204,236`).
+- **Producción en Vercel.** En Vercel la optimización de imágenes la hace la propia plataforma, así que el RCE de GHSA-2xp9-vwfh-vxw4 **probablemente no aplica**. Por eso **reclasifico C3 de Crítico a Alto**. Sigue siendo un arreglo de la fase 0: la exposición pública de los IDs de acción y el DoS con Server Actions sí aplican. Además, con `remotePatterns: *.supabase.co`, cualquiera puede usar tu optimizador (que Vercel factura por uso) con imágenes de otros proyectos Supabase. Y, como Vercel corre en UTC, el desfase horario de **B2** está confirmado para Caracas (UTC-4).
 
 ### Contexto que cambia el alcance de lo pedido
 - **No existe módulo de notas ni calificaciones.** No hay modelos ni rutas para eso; "Boletín" solo aparece como documento requerido en `app/(dashboard)/alumnos/nuevo/FichaAlumnoForm.tsx:480`. No hubo cálculos de notas que revisar.
@@ -26,7 +38,7 @@ Otros bloqueantes: las migraciones no coinciden con el esquema, los pagos no se 
 |---|---|---|
 | C1 | Crítico | Un usuario sin rol se trata como ADMIN |
 | C2 | Crítico | Ninguna tabla tiene RLS en Supabase |
-| C3 | Crítico | `next@16.2.6` vulnerable y optimizador de imágenes abierto |
+| C3 | Alto (antes Crítico; reclasificado por el hosting en Vercel) | `next@16.2.6` vulnerable y optimizador de imágenes abierto |
 | A1 | Alto | La autorización depende solo del proxy y de la interfaz |
 | A2 | Alto | Las migraciones no reflejan el esquema actual |
 | A3 | Alto | Pagos: el servidor confía en el cliente, no hay anulación ni auditoría |
@@ -313,8 +325,12 @@ Otros bloqueantes: las migraciones no coinciden con el esquema, los pagos no se 
 
 ### M16 · La SECRETARIA ve nómina, contabilidad y datos de salud
 - **Dónde:** `proxy.ts:4` solo reserva `/configuracion` y `/admin` para el ADMIN. `components/layout/Sidebar.tsx:23-34` le da a la SECRETARIA acceso a nómina (`:29`), contabilidad (`:30`) y reportes.
-- **Por qué importa:** cualquier secretaria ve los sueldos de todo el personal y la salud de todos los alumnos. Puede ser intencional, pero hay que confirmarlo.
-- **Cómo arreglarlo:** definir con el colegio una matriz de roles (por ejemplo, nómina y balance solo para ADMIN) y aplicarla en la DAL de A1.
+- **Por qué importa:** cualquier secretaria ve los sueldos de todo el personal. **Confirmado por ti: la secretaria sí puede ver contabilidad y datos de salud, pero no la nómina.** Hoy la ve por tres vías: `/docentes/nomina/*`, `/api/nomina/[id]` y los egresos de nómina dentro de contabilidad (`app/(dashboard)/contabilidad/EgresosTable.tsx:24,124,152-155`; `app/(dashboard)/docentes/actions.ts:204,236`).
+- **Cómo arreglarlo:**
+  1. En la DAL de A1, exigir `ADMIN` en `getNominaFormData`, `registrarPagoNomina`, `getPagoNominaById` y `/api/nomina/[id]`, y agregar `/docentes/nomina` a `ADMIN_PATHS` (`proxy.ts:4`) solo como filtro previo.
+  2. Para una secretaria, en contabilidad, mostrar la nómina agregada (una línea "Nómina" con el total del mes, sin nombres ni enlaces, también en el CSV y en el PDF de balance) y dejar de guardar el nombre del docente en `Egreso.descripcion`.
+  3. En `/docentes`, ocultar el botón "Nómina" y el historial de pagos (`app/(dashboard)/docentes/[id]/page.tsx`, `app/(dashboard)/docentes/DocentesTable.tsx`) a quien no sea ADMIN.
+  4. Agregar tests que comprueben que la secretaria recibe 403 en todas esas vías.
 
 ### M17 · Sin CI, lint roto y cobertura de tests casi nula
 - **Dónde:**
@@ -390,9 +406,9 @@ Esfuerzo: **S** ≈ horas a 1 día · **M** ≈ 2 a 5 días · **L** ≈ 1 a 2 s
 |---|---|---|---|
 | 1 | Denegar por defecto a quien no tenga rol, asignar el rol a los usuarios existentes y desactivar el registro público en Supabase | C1 | S |
 | 2 | Desactivar la Data API o revocar `anon`/`authenticated`, habilitar RLS en todas las tablas y revisar el Security Advisor | C2 | S |
-| 3 | Subir `next` y `eslint-config-next` a 16.3.7 o más, quitar `remotePatterns` y volver a pasar `npm audit` | C3 | S |
+| 3 | Subir `next` y `eslint-config-next` a 16.3.7 o más, quitar `remotePatterns`, volver a pasar `npm audit` y fijar una región UE para las funciones de Vercel | C3, A5 | S |
 | 4 | Crear la migración faltante, `migrate resolve` en producción, separar las bases de desarrollo y producción | A2 | S–M |
-| 5 | DAL con `requireUser`/`requireRole` en las 50 acciones y las 6 rutas API, lecturas a módulos `server-only` y matriz de roles | A1, M16 | M |
+| 5 | DAL con `requireUser`/`requireRole` en las 50 acciones y las 6 rutas API, lecturas a módulos `server-only` y matriz de roles; nómina solo para ADMIN, también dentro de contabilidad | A1, M16 | M |
 | 6 | Pagos, ventas y nómina recalculados y validados en el servidor, bloqueo de duplicados, anulación con motivo y auditoría | A3, M8, M10 | L |
 | 7 | Guardar el equivalente en USD con la tasa del día y usar una única función de reportes | A4, M9, B6 | M |
 | 8 | Aviso y consentimiento; edición, baja y anonimización; limpieza del JSON de solicitudes; retención (después de confirmar el marco legal) | A5 | L |
@@ -421,8 +437,8 @@ Esfuerzo: **S** ≈ horas a 1 día · **M** ≈ 2 a 5 días · **L** ≈ 1 a 2 s
 
 ## Lo que NO pude revisar y por qué
 
-1. **Configuración real del proyecto Supabase:** registros públicos, confirmación de correo, esquemas expuestos por la Data API, permisos de `anon`/`authenticated`, estado de RLS, backups y región. Decidí **no conectarme** aunque había herramientas disponibles: el encargo era revisar código y esa base contiene datos de menores. Si me autorizas, puedo hacer una verificación de solo lectura (Security Advisor y estado de RLS).
-2. **Vercel u otro hosting:** variables de entorno, qué entorno apunta a qué base, Deployment Protection, optimización de imágenes, región y retención de logs. De eso depende si el RCE de C3 aplica.
+1. **Configuración real del proyecto Supabase:** registros públicos, confirmación de correo, esquemas expuestos por la Data API, permisos de `anon`/`authenticated`, estado de RLS y backups. Con tu autorización intenté una verificación de solo lectura, pero el proyecto está **pausado**. Los advisors vuelven vacíos (no es concluyente) y el SQL falla por timeout. Me detuve tras esos dos intentos, porque reactivarlo ya no es de solo lectura. Además, la configuración de Auth (sign-ups) no se puede leer con las herramientas disponibles: hay que mirarla en el panel, en Authentication → Sign In / Providers.
+2. **Vercel:** variables de entorno, qué entorno apunta a qué base, Deployment Protection, región de las funciones y retención de logs. No lo pediste y no lo revisé.
 3. **Estado real de la base de producción frente a las migraciones:** si se aplicó el cambio de `fechaNacimiento` y si se perdieron los datos de `edad` (A2).
 4. **Pruebas dinámicas con sesiones reales:** no tengo credenciales. El escalamiento de la SECRETARIA (A1) y la conclusión de que el reenvío de acciones pasa por el proxy salen del análisis del código, del manifiesto del build y del código interno de Next. No los reproduje contra una instancia en ejecución.
 5. **Implementación exacta de `cuid()` en Prisma 7:** dos intentos de análisis del runtime minificado no dieron resultado y me detuve, como pediste. En M2 no afirmo cuál es su fuente de aleatoriedad.
@@ -432,7 +448,6 @@ Esfuerzo: **S** ≈ horas a 1 día · **M** ≈ 2 a 5 días · **L** ≈ 1 a 2 s
 9. **Componentes generados de shadcn/ui** (`components/ui/*`, `hooks/use-toast.ts`): solo los recorrí por encima; es código estándar.
 
 ## Preguntas abiertas para ti
-1. **Marco legal:** el código apunta a un colegio en Venezuela. ¿El tratamiento o el soporte lo haces tú desde España? Según la respuesta aplica la LOPNNA y la Constitución venezolana y, posiblemente, también el RGPD. Eso define cómo implementar A5.
-2. **Rol SECRETARIA:** ¿debe ver nómina, contabilidad y datos de salud (M16)?
-3. **Hosting:** ¿producción corre en Vercel? Afecta a C3.
-4. **Supabase:** ¿quieres que haga una verificación de solo lectura del proyecto (punto 1 de la sección anterior)?
+Las cuatro preguntas iniciales ya están respondidas; el detalle está en "Actualización tras tus respuestas". Quedan pendientes:
+1. **Supabase pausado:** ¿el proyecto `gloria-falcon` es el de producción? Si lo es y está pausado, producción no funciona. Si otro proyecto hace de producción, ¿cuál es? Para cerrar C1 y C2 hay dos opciones: que lo reactives y yo repito la verificación de solo lectura, o que revises tú en el panel *Authentication → Sign In / Providers* ("Allow new users to sign up") y *Advisors → Security*.
+2. **Vercel:** ¿quieres que revise en modo solo lectura la región de las funciones y la configuración del proyecto? Importa para el RGPD (subencargado en EE. UU.).

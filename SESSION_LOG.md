@@ -121,3 +121,27 @@ Intentos que no dieron resultado (me detuve según la regla de los dos intentos)
 - Código del repositorio: sin cambios. Solo se agregan estos dos archivos en la raíz.
 - Siguiente paso sugerido: confirmar las preguntas abiertas (marco legal Venezuela/España, alcance del rol SECRETARIA, hosting) y, si se autoriza, hacer una verificación de solo lectura del proyecto Supabase (Security Advisor, RLS, sign-ups) para convertir C1/C2 de "condicionados" a "confirmados" o descartarlos.
 
+
+## 10. Segunda ronda (respuestas del usuario y verificación de Supabase)
+
+Respuestas del usuario:
+- El colegio está en Venezuela y el soporte se da desde España.
+- La SECRETARIA ve contabilidad y salud, pero **no** la nómina.
+- Producción corre en Vercel.
+- Autoriza una verificación de Supabase de solo lectura.
+
+Verificación de Supabase (solo metadatos, sin leer ninguna fila):
+- `list_projects`: el proyecto `gloria-falcon` (`ifnhauunhgkhosbnfaqq`) está en `eu-west-1` con estado **INACTIVE**.
+- `get_advisors(security)`: `lints: []`. No es concluyente con el proyecto pausado.
+- `execute_sql` (consulta de `relrowsecurity` en `pg_class`): timeout de conexión.
+- Me detuve aquí por la regla de los dos intentos. No reactivo el proyecto (sería una escritura). La configuración de sign-ups no se puede leer con estas herramientas.
+
+Hallazgos nuevos en el código:
+- La nómina se filtra también desde contabilidad: `EgresosTable.tsx:24,124,152-155` muestra nombre, monto y enlace, y `docentes/actions.ts:204,236` guarda el nombre en la descripción del egreso.
+- No hay `vercel.json` ni `preferredRegion` ⇒ las funciones usan la región por defecto de Vercel (EE. UU.), salvo que se haya cambiado en el panel.
+
+Decisiones:
+- C3 pasa de Crítico a Alto, porque en Vercel la optimización de imágenes no la hace el `sharp` de la app.
+- M16 pasa a ser un requisito concreto.
+- A5 incorpora las obligaciones probables del RGPD como encargado del tratamiento.
+- REVIEW.md actualizado: nueva sección de actualización, índice, M16, "Lo que no pude revisar", preguntas abiertas y plan.

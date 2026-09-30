@@ -439,7 +439,7 @@ Implementado en la rama `claude/busy-gates-kb3ip8` (un commit por bloque; tests,
 **Para llevarlo a producción:**
 1. ✅ (30/09) Rol ADMIN asignado a la cuenta que no lo tenía.
 2. ✅ (30/09) Las 4 migraciones nuevas aplicadas en producción y registradas en `_prisma_migrations` con los mismos checksums de Prisma. Son compatibles con el código que corre hoy (solo agregan columnas opcionales).
-3. Pendiente: fusionar la rama y desplegar.
+3. ✅ (30/09) Rama fusionada en `master` (PR #1, `05c8896`) y desplegada en Vercel (`dpl_DrjduVxtTuea4uQ77w6GQARsLTsZ`, región `dub1`).
 
 ## Plan de arreglos sugerido
 

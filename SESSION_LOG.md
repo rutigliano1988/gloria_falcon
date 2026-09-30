@@ -203,3 +203,13 @@ A pedido del usuario:
 - **Verificación:** 93 tests unitarios y 17 de integración en verde; `tsc` y build OK; lint sin errores.
 - **Sin verificación visual:** la pantalla de edición no se probó en el navegador, porque requiere sesión de Supabase.
 
+## 14. PR, fusión y despliegue
+
+- Abrí el PR rutigliano1988/gloria_falcon#1 (`claude/busy-gates-kb3ip8` → `master`) y quedé vigilándolo. No había CI ni comentarios. El usuario lo fusionó (`05c8896`), y cancelé la revisión automática de cada hora.
+- A pedido del usuario desplegué en producción con el conector de Vercel (`create_deployment` con `gitSource` de GitHub, `ref master`, sha `05c8896`, `target production`).
+  - Despliegue `dpl_DrjduVxtTuea4uQ77w6GQARsLTsZ`: build OK, estado READY, alias `gloria-falcon.vercel.app` asignado.
+  - Región `dub1`: la cabecera `x-vercel-id` muestra `dub1`.
+- **Comprobaciones sin sesión:** `/login` responde 200; `/api/nomina` sin sesión responde 401 `{"error":"No autorizado"}`.
+- **Pendiente para el usuario:** probar con sesión el login, "Editar datos" y el formulario de cobro.
+- **Memoria del proyecto:** `CLAUDE.md` ahora recoge el contexto, las reglas que no se deben romper, los comandos, el estado y los pendientes.
+

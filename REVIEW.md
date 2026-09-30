@@ -5,10 +5,10 @@
 
 ## Resumen ejecutivo
 
-**Estado general:** es un MVP funcional y legible, con bases sanas: Prisma con consultas parametrizadas, zod, ningún punto de entrada para XSS y la service key solo en el servidor. Aun así, **no está listo para un piloto con datos reales de menores** hasta cerrar los 2 problemas críticos y los 6 altos (C3 pasó a Alto al confirmar que producción corre en Vercel). Los tres más graves:
+**Estado general:** es un MVP funcional y legible, con bases sanas: Prisma con consultas parametrizadas, zod, ningún punto de entrada para XSS y la service key solo en el servidor. Aun así, **no está listo para un piloto con datos reales de menores** hasta cerrar el problema crítico y los 6 altos. C3 pasó a Alto al confirmar Vercel, y C2 a Medio al verificar que producción ya tiene RLS; ver las actualizaciones. Los tres más graves:
 
 1. **Un usuario sin rol se trata como ADMIN** (`proxy.ts:62`, `lib/auth.ts:15`). Si el registro público de Supabase está activo (lo está por defecto) o falla una invitación, esa persona obtiene acceso total a fichas, datos de salud, pagos y usuarios.
-2. **Ninguna tabla tiene RLS** (no hay ni una política en `prisma/migrations/`). Si la Data API de Supabase expone el esquema `public` (lo habitual), basta la anon key para leer y escribir toda la base.
+2. ~~Ninguna tabla tiene RLS~~ → **verificado en producción: RLS activo y sin permisos para `anon`**. Lo que falta es que no esté en las migraciones, así que un entorno nuevo nacería sin RLS (ahora Medio).
 3. **La autorización vive solo en `proxy.ts` y en la interfaz.** 44 de las 50 Server Actions del panel no verifican sesión ni rol. Hoy mismo una SECRETARIA puede aprobar o rechazar inscripciones, que solo están restringidas en pantalla. Además, `next@16.2.6` expone esos IDs de acción públicamente y arrastra avisos de seguridad críticos.
 
 Otros bloqueantes: las migraciones no coinciden con el esquema, los pagos no se validan en el servidor ni se pueden anular o auditar, y el dashboard deja la nómina fuera de los egresos.
@@ -25,6 +25,27 @@ Otros bloqueantes: las migraciones no coinciden con el esquema, los pagos no se 
 - **Rol SECRETARIA: ve contabilidad y salud, pero no la nómina.** M16 pasa a ser un requisito concreto (ver M16). **Ojo:** no basta con bloquear `/docentes/nomina`. Contabilidad lista cada egreso de nómina con el nombre del docente y el monto (`app/(dashboard)/contabilidad/EgresosTable.tsx:24,124`), lo exporta a CSV y enlaza a "Ver nómina" (`:152-155`). La descripción que se guarda ya incluye el nombre (`app/(dashboard)/docentes/actions.ts:204,236`).
 - **Producción en Vercel.** En Vercel la optimización de imágenes la hace la propia plataforma, así que el RCE de GHSA-2xp9-vwfh-vxw4 **probablemente no aplica**. Por eso **reclasifico C3 de Crítico a Alto**. Sigue siendo un arreglo de la fase 0: la exposición pública de los IDs de acción y el DoS con Server Actions sí aplican. Además, con `remotePatterns: *.supabase.co`, cualquiera puede usar tu optimizador (que Vercel factura por uso) con imágenes de otros proyectos Supabase. Y, como Vercel corre en UTC, el desfase horario de **B2** está confirmado para Caracas (UTC-4).
 
+### Segunda actualización: verificación de solo lectura de Supabase (ya activo) y Vercel
+
+Consulté solo metadatos y conteos; no leí ninguna fila con datos de alumnos, pagos ni correos.
+
+**Supabase (`ifnhauunhgkhosbnfaqq`, `eu-west-1`, ACTIVE_HEALTHY):**
+- **RLS activado en las 23 tablas de `public`**, sin políticas, y **`anon`/`authenticated` sin permisos de SELECT ni INSERT** (consulta a `pg_class` y `has_table_privilege`). El Security Advisor lo confirma con `rls_enabled_no_policy` (INFO) en las 23 tablas, que es lo esperado cuando solo accede el servidor. **La exposición de C2 no existe en producción: C2 pasa de Crítico a Medio.** Lo que queda pendiente es que esto se hizo a mano y **no está en las migraciones**: una base nueva creada desde el repo (por ejemplo, la del piloto) nacería sin RLS. Hay que llevarlo a una migración.
+- **Deriva de A2 confirmada:** producción tiene `representantes.fechaNacimiento` y `docentes.fechaNacimiento`, ya no tiene `edad`, y `_prisma_migrations` solo registra las 2 migraciones del repo.
+- **C1, datos reales:** hay 2 usuarios en `auth.users`. 1 tiene `rol = ADMIN` y **1 no tiene rol, así que la app lo trata como ADMIN**. 1 de los 2 no se creó por invitación (`invited_at` nulo): o se registró por su cuenta o se creó desde el panel. Si "Allow new users to sign up" está activo no se puede leer con estas herramientas; hay que mirarlo en el panel. **C1 sigue siendo Crítico** mientras exista el `?? "ADMIN"`.
+- **Nuevo (Bajo, B17):** el Security Advisor avisa `auth_leaked_password_protection` (WARN). Supabase no comprueba si las contraseñas aparecen en filtraciones conocidas (HaveIBeenPwned). Se activa en *Authentication → Passwords*.
+
+**Vercel (proyecto `gloria-falcon`, equipo `rutigliano1988s-projects`):**
+- Producción despliega **exactamente el commit revisado** (`769f4a1`, deployment `dpl_FsNZHUayy4tnF2avK12fSt1ecGT1`, desplegado por CLI).
+- **Las funciones corren en `iad1` (Washington, EE. UU.)** y la base está en Irlanda. Tiene dos consecuencias:
+  1. Cada petición cruza el Atlántico varias veces: `getUser()` hasta 3 veces (B13) más las consultas Prisma.
+  2. Hay tratamiento de datos de menores en EE. UU. por un subencargado.
+
+  **Recomendación:** fijar la región de funciones en `dub1` (Dublín), junto a la base (*Settings → Functions → Function Region*, o `regions: ["dub1"]` en `vercel.json`). Mejora la latencia y simplifica la parte de RGPD de A5.
+- **Protección de despliegues:** `ssoProtection = all_except_custom_domains` y sin contraseña. Protege las URLs de cada despliegue, pero el dominio de producción `gloria-falcon.vercel.app` es público, como corresponde. Por eso el login es la única barrera y C1 importa tanto.
+- **Probable bug (B18):** `lib/logo.ts:10-20` descarga el logo desde `https://${VERCEL_URL}/logo.jpg`. `VERCEL_URL` es la URL del despliegue, que está protegida por SSO, así que probablemente responde 401 y los PDF salen sin logo cuando `public/` no está en el sistema de archivos de la función. No lo reproduje. Solución: importar el logo como asset o leerlo con `path.join(process.cwd(), "public")` incluyéndolo en el trazado de archivos (`outputFileTracingIncludes`).
+- No pude listar las variables de entorno (403 del conector, sin permiso). Quedan sin verificar qué base usa cada entorno y si preview comparte base con producción.
+
 ### Contexto que cambia el alcance de lo pedido
 - **No existe módulo de notas ni calificaciones.** No hay modelos ni rutas para eso; "Boletín" solo aparece como documento requerido en `app/(dashboard)/alumnos/nuevo/FichaAlumnoForm.tsx:480`. No hubo cálculos de notas que revisar.
 - **Representantes y docentes no tienen cuenta.** Solo existen los roles `ADMIN` y `SECRETARIA` (`lib/auth.ts:4`). Los representantes solo usan el formulario público `/inscripcion/[token]`, y los docentes existen únicamente como registros de nómina. Las preguntas "¿un representante ve datos de otro alumno?" y "¿un docente accede a lo que no le toca?" las evalué sobre ese formulario (hallazgos M2 y M13) y sobre la separación ADMIN/SECRETARIA (A1 y M16).
@@ -37,7 +58,7 @@ Otros bloqueantes: las migraciones no coinciden con el esquema, los pagos no se 
 | ID | Severidad | Título |
 |---|---|---|
 | C1 | Crítico | Un usuario sin rol se trata como ADMIN |
-| C2 | Crítico | Ninguna tabla tiene RLS en Supabase |
+| C2 | Medio (antes Crítico; en producción RLS está activo y sin permisos para anon) | El RLS no está en las migraciones (solo se aplicó a mano en producción) |
 | C3 | Alto (antes Crítico; reclasificado por el hosting en Vercel) | `next@16.2.6` vulnerable y optimizador de imágenes abierto |
 | A1 | Alto | La autorización depende solo del proxy y de la interfaz |
 | A2 | Alto | Las migraciones no reflejan el esquema actual |
@@ -61,7 +82,7 @@ Otros bloqueantes: las migraciones no coinciden con el esquema, los pagos no se 
 | M15 | Medio | La importación CSV es frágil y deja fichas incompletas |
 | M16 | Medio | La SECRETARIA ve nómina, contabilidad y datos de salud |
 | M17 | Medio | Sin CI, lint roto y cobertura de tests casi nula |
-| B1–B16 | Bajo | Ver la tabla de la sección Bajo |
+| B1–B18 | Bajo | Ver la tabla de la sección Bajo y la segunda actualización (B17, B18) |
 
 ---
 
@@ -405,8 +426,8 @@ Esfuerzo: **S** ≈ horas a 1 día · **M** ≈ 2 a 5 días · **L** ≈ 1 a 2 s
 | # | Qué | Hallazgos | Esfuerzo |
 |---|---|---|---|
 | 1 | Denegar por defecto a quien no tenga rol, asignar el rol a los usuarios existentes y desactivar el registro público en Supabase | C1 | S |
-| 2 | Desactivar la Data API o revocar `anon`/`authenticated`, habilitar RLS en todas las tablas y revisar el Security Advisor | C2 | S |
-| 3 | Subir `next` y `eslint-config-next` a 16.3.7 o más, quitar `remotePatterns`, volver a pasar `npm audit` y fijar una región UE para las funciones de Vercel | C3, A5 | S |
+| 2 | Pasar a una migración el RLS y los REVOKE que ya existen en producción, desactivar la Data API si no se usa, y activar la protección contra contraseñas filtradas | C2, B17 | S |
+| 3 | Subir `next` y `eslint-config-next` a 16.3.7 o más, quitar `remotePatterns`, volver a pasar `npm audit` y fijar la región `dub1` para las funciones de Vercel | C3, A5 | S |
 | 4 | Crear la migración faltante, `migrate resolve` en producción, separar las bases de desarrollo y producción | A2 | S–M |
 | 5 | DAL con `requireUser`/`requireRole` en las 50 acciones y las 6 rutas API, lecturas a módulos `server-only` y matriz de roles; nómina solo para ADMIN, también dentro de contabilidad | A1, M16 | M |
 | 6 | Pagos, ventas y nómina recalculados y validados en el servidor, bloqueo de duplicados, anulación con motivo y auditoría | A3, M8, M10 | L |
@@ -437,8 +458,8 @@ Esfuerzo: **S** ≈ horas a 1 día · **M** ≈ 2 a 5 días · **L** ≈ 1 a 2 s
 
 ## Lo que NO pude revisar y por qué
 
-1. **Configuración real del proyecto Supabase:** registros públicos, confirmación de correo, esquemas expuestos por la Data API, permisos de `anon`/`authenticated`, estado de RLS y backups. Con tu autorización intenté una verificación de solo lectura, pero el proyecto está **pausado**. Los advisors vuelven vacíos (no es concluyente) y el SQL falla por timeout. Me detuve tras esos dos intentos, porque reactivarlo ya no es de solo lectura. Además, la configuración de Auth (sign-ups) no se puede leer con las herramientas disponibles: hay que mirarla en el panel, en Authentication → Sign In / Providers.
-2. **Vercel:** variables de entorno, qué entorno apunta a qué base, Deployment Protection, región de las funciones y retención de logs. No lo pediste y no lo revisé.
+1. **Configuración de Auth de Supabase:** si "Allow new users to sign up" está activo, la política de confirmación de correo y los backups. No se pueden leer con las herramientas de solo lectura disponibles; hay que mirarlos en el panel (*Authentication → Sign In / Providers*). El estado de RLS, los permisos de `anon`/`authenticated` y la deriva del esquema **sí quedaron verificados** (ver la segunda actualización).
+2. **Variables de entorno de Vercel:** el conector no tiene permiso para listarlas (403). Quedan sin verificar qué base usa cada entorno y si preview comparte base con producción. La región, la protección de despliegues y el commit desplegado sí quedaron verificados.
 3. **Estado real de la base de producción frente a las migraciones:** si se aplicó el cambio de `fechaNacimiento` y si se perdieron los datos de `edad` (A2).
 4. **Pruebas dinámicas con sesiones reales:** no tengo credenciales. El escalamiento de la SECRETARIA (A1) y la conclusión de que el reenvío de acciones pasa por el proxy salen del análisis del código, del manifiesto del build y del código interno de Next. No los reproduje contra una instancia en ejecución.
 5. **Implementación exacta de `cuid()` en Prisma 7:** dos intentos de análisis del runtime minificado no dieron resultado y me detuve, como pediste. En M2 no afirmo cuál es su fuente de aleatoriedad.
@@ -448,6 +469,6 @@ Esfuerzo: **S** ≈ horas a 1 día · **M** ≈ 2 a 5 días · **L** ≈ 1 a 2 s
 9. **Componentes generados de shadcn/ui** (`components/ui/*`, `hooks/use-toast.ts`): solo los recorrí por encima; es código estándar.
 
 ## Preguntas abiertas para ti
-Las cuatro preguntas iniciales ya están respondidas; el detalle está en "Actualización tras tus respuestas". Quedan pendientes:
-1. **Supabase pausado:** ¿el proyecto `gloria-falcon` es el de producción? Si lo es y está pausado, producción no funciona. Si otro proyecto hace de producción, ¿cuál es? Para cerrar C1 y C2 hay dos opciones: que lo reactives y yo repito la verificación de solo lectura, o que revises tú en el panel *Authentication → Sign In / Providers* ("Allow new users to sign up") y *Advisors → Security*.
-2. **Vercel:** ¿quieres que revise en modo solo lectura la región de las funciones y la configuración del proyecto? Importa para el RGPD (subencargado en EE. UU.).
+Ya respondiste las preguntas iniciales y quedaron hechas las dos verificaciones de solo lectura. Queda pendiente:
+1. **Usuario sin rol:** hay 1 cuenta sin `rol` que hoy funciona como ADMIN. Conviene asignarle su rol explícito y revisar en el panel que "Allow new users to sign up" esté **desactivado**. Así C1 deja de ser explotable incluso antes del arreglo de código.
+2. **Variables de entorno:** revisa en Vercel que preview no apunte a la base de producción. Yo no pude verificarlo.

@@ -145,3 +145,20 @@ Decisiones:
 - M16 pasa a ser un requisito concreto.
 - A5 incorpora las obligaciones probables del RGPD como encargado del tratamiento.
 - REVIEW.md actualizado: nueva sección de actualización, índice, M16, "Lo que no pude revisar", preguntas abiertas y plan.
+
+## 11. Tercera ronda: Supabase activo y Vercel (solo lectura)
+
+Supabase (solo metadatos y conteos; no leí ninguna fila de datos ni correos):
+- Proyecto ACTIVE_HEALTHY. Security Advisor: `rls_enabled_no_policy` (INFO, 23 tablas) y `auth_leaked_password_protection` (WARN).
+- RLS activo en las 23 tablas, 0 políticas, y `anon`/`authenticated` sin SELECT ni INSERT ⇒ C2 pasa de Crítico a Medio (el RLS falta en las migraciones).
+- Deriva confirmada: producción tiene las columnas `fechaNacimiento`; `_prisma_migrations` solo registra 2 migraciones.
+- `auth.users`: 2 usuarios, 1 ADMIN y 1 sin rol (efectivamente ADMIN); 1 no se creó por invitación. La configuración de sign-ups no se puede leer por SQL ni con los tools.
+
+Vercel:
+- Equipo `rutigliano1988s-projects`, proyecto `gloria-falcon`. Producción despliega el commit `769f4a1` (CLI), región `iad1`, `ssoProtection all_except_custom_domains`, dominio `gloria-falcon.vercel.app`.
+- Variables de entorno: 403 (sin permiso). No insistí.
+- Nuevo hallazgo probable B18: el fallback de `lib/logo.ts` hace fetch a `VERCEL_URL`, que está protegida por SSO. No lo reproduje.
+
+Decisiones:
+- Solo queda un Crítico: C1. Recomiendo fijar la región `dub1`.
+- REVIEW.md actualizado: segunda actualización, índice, resumen, plan, "Lo que no pude revisar" y preguntas.

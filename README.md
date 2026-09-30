@@ -113,10 +113,20 @@ __tests__/                 # Tests unitarios
 
 ---
 
-## Nota sobre migraciones de base de datos
+## Migraciones de base de datos
 
-Si actualizaste el schema de Prisma, generá la migración antes de hacer deploy:
+- **Nunca** modifiques la base de producción a mano ni con `prisma db push`: todo cambio va en una migración versionada en `prisma/migrations/`.
+- Desarrolla contra una base **local o de desarrollo**, nunca contra producción. `prisma migrate dev` puede proponer **resetear** la base si detecta diferencias. Revisa a qué apunta `DIRECT_URL` en `.env.local` antes de ejecutarlo.
 
 ```bash
+# Crear una migración nueva (base de desarrollo)
 npx prisma migrate dev --name descripcion_del_cambio
+
+# Aplicar migraciones pendientes en producción
+DIRECT_URL="<conexión directa de producción>" npx prisma migrate deploy
+
+# Comprobar que la base coincide con schema.prisma (debe decir "No difference detected")
+npx prisma migrate diff --from-config-datasource --to-schema prisma/schema.prisma --exit-code
 ```
+
+- Toda tabla nueva debe activar RLS en su migración (`ALTER TABLE "<tabla>" ENABLE ROW LEVEL SECURITY;`). La app accede solo desde el servidor con Prisma y los roles públicos de Supabase no deben tener acceso. Lo verifica `__tests__/migraciones.test.ts`.

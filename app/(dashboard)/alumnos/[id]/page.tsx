@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { Button } from "@/components/ui/button";
 import { calcularEdad, formatFecha, PROCEDENCIA_LABELS, TIPO_SERVICIO_LABELS } from "@/lib/utils";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, Pencil } from "lucide-react";
 import { CambiarEstado } from "./CambiarEstado";
 import { Reinscribir } from "./Reinscribir";
 
@@ -54,6 +54,11 @@ export default async function AlumnoDetallePage({ params }: { params: Promise<{ 
           )}
         </div>
         <div className="flex items-center gap-2 shrink-0">
+          <Link href={`/alumnos/${alumno.id}/editar`}>
+            <Button variant="outline" size="sm">
+              <Pencil className="mr-1 h-4 w-4" /> Editar datos
+            </Button>
+          </Link>
           <Reinscribir alumnoId={alumno.id} grados={grados} anos={anos} anosInscritos={anosInscritos} />
           <CambiarEstado alumnoId={alumno.id} estadoActual={alumno.estado} />
         </div>

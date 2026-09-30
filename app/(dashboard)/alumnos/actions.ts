@@ -6,6 +6,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import type { Prisma } from "@prisma/client";
 import { registrarAudit } from "@/lib/audit";
+import { parsePrismaError } from "@/lib/utils";
 import { ALUMNOS_POR_PAGINA } from "./constants";
 
 // ─── Schemas ─────────────────────────────────────────────────────────────────
@@ -160,6 +161,189 @@ export async function crearAlumno(data: AlumnoFormData) {
   });
 
   revalidatePath("/alumnos");
+}
+
+// ─── Editar ficha (rectificación de datos) ────────────────────────────────────
+
+// Texto opcional: recorta espacios, limita longitud y guarda "" como null.
+const texto = (max: number) =>
+  z
+    .string()
+    .trim()
+    .max(max, `Máximo ${max} caracteres`)
+    .nullish()
+    .transform((v) => v || null);
+const fechaOpcional = z
+  .union([z.iso.date("Fecha inválida"), z.literal("")])
+  .nullish()
+  .transform((v) => (v ? new Date(v) : null));
+
+const representanteEdicionSchema = z.object({
+  id: z.string().min(1).optional(),
+  tipo: z.enum(["MADRE", "PADRE", "TUTOR"]),
+  apellidosNombres: z.string().trim().min(1, "Nombre del representante obligatorio").max(150),
+  fechaNacimiento: fechaOpcional,
+  cedula: texto(20),
+  telefonoHab: texto(30),
+  telefonoCelular: texto(30),
+  ocupacion: texto(100),
+  telefonoOficina: texto(30),
+  email: z
+    .union([z.email("Correo inválido").max(150), z.literal("")])
+    .nullish()
+    .transform((v) => v || null),
+});
+
+const personaSchema = z.object({ nombre: z.string().trim().max(150), cedula: texto(20) });
+const contactoSchema = z.object({ nombre: z.string().trim().max(150), telefono: texto(30) });
+
+const edicionAlumnoSchema = z.object({
+  primerApellido: z.string().trim().min(1, "Primer apellido obligatorio").max(60),
+  segundoApellido: texto(60),
+  primerNombre: z.string().trim().min(1, "Primer nombre obligatorio").max(60),
+  segundoNombre: texto(60),
+  cedulaEscolar: texto(20),
+  municipioNacimiento: texto(80),
+  estadoNacimiento: texto(40),
+  sexo: z.enum(["M", "F"], "Selecciona el sexo"),
+  fechaNacimiento: z.iso.date("Fecha de nacimiento inválida"),
+  domicilio: texto(300),
+  telefonoHogar: texto(30),
+  procedencia: z.enum(["HOGAR", "MISMO_PLANTEL", "OTRO_PLANTEL"]),
+  nombrePlantelOrigen: texto(150),
+  salud: z.object({
+    enfermedadActual: texto(500),
+    tratamiento: texto(500),
+    alergiasMedicamentos: texto(500),
+    medicamentoFiebre: texto(200),
+    seguroSaludTelefono: texto(30),
+  }),
+  representantes: z.array(representanteEdicionSchema).max(6),
+  autorizados: z.array(personaSchema).max(6),
+  contactos: z.array(contactoSchema).max(6),
+});
+
+export type EdicionAlumnoInput = z.input<typeof edicionAlumnoSchema>;
+export type ResultadoEdicion = { ok: true } | { ok: false; error: string };
+
+const CAMPOS_ALUMNO = [
+  "primerApellido", "segundoApellido", "primerNombre", "segundoNombre", "cedulaEscolar",
+  "municipioNacimiento", "estadoNacimiento", "sexo", "fechaNacimiento", "domicilio",
+  "telefonoHogar", "procedencia", "nombrePlantelOrigen",
+] as const;
+const CAMPOS_SALUD = [
+  "enfermedadActual", "tratamiento", "alergiasMedicamentos", "medicamentoFiebre", "seguroSaludTelefono",
+] as const;
+
+function mismoValor(a: unknown, b: unknown): boolean {
+  if (a instanceof Date || b instanceof Date) {
+    return (a instanceof Date ? a.getTime() : a) === (b instanceof Date ? b.getTime() : b);
+  }
+  return (a ?? null) === (b ?? null);
+}
+
+export async function actualizarAlumno(alumnoId: string, data: EdicionAlumnoInput): Promise<ResultadoEdicion> {
+  await requireUser();
+  const parsed = edicionAlumnoSchema.safeParse(data);
+  if (!parsed.success) return { ok: false, error: parsed.error.issues.map((i) => i.message).join(" · ") };
+  const d = parsed.data;
+
+  const fechaNacimiento = new Date(d.fechaNacimiento);
+  if (fechaNacimiento.getTime() > Date.now()) {
+    return { ok: false, error: "La fecha de nacimiento no puede ser futura." };
+  }
+
+  const actual = await prisma.alumno.findUnique({
+    where: { id: alumnoId },
+    include: { saludAlumno: true, representantes: { select: { id: true } } },
+  });
+  if (!actual) return { ok: false, error: "El alumno no existe." };
+
+  // Solo se pueden editar representantes de este alumno.
+  const idsActuales = new Set(actual.representantes.map((r) => r.id));
+  if (d.representantes.some((r) => r.id && !idsActuales.has(r.id))) {
+    return { ok: false, error: "Representante no válido para este alumno." };
+  }
+
+  const datosAlumno = {
+    primerApellido: d.primerApellido,
+    segundoApellido: d.segundoApellido,
+    primerNombre: d.primerNombre,
+    segundoNombre: d.segundoNombre,
+    cedulaEscolar: d.cedulaEscolar,
+    municipioNacimiento: d.municipioNacimiento,
+    estadoNacimiento: d.estadoNacimiento,
+    sexo: d.sexo,
+    fechaNacimiento,
+    domicilio: d.domicilio,
+    telefonoHogar: d.telefonoHogar,
+    procedencia: d.procedencia,
+    nombrePlantelOrigen: d.procedencia === "OTRO_PLANTEL" ? d.nombrePlantelOrigen : null,
+  };
+
+  const idsEnviados = new Set(d.representantes.flatMap((r) => (r.id ? [r.id] : [])));
+  const idsBorrados = [...idsActuales].filter((id) => !idsEnviados.has(id));
+
+  try {
+    await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+      await tx.alumno.update({ where: { id: alumnoId }, data: datosAlumno });
+      await tx.saludAlumno.upsert({
+        where: { alumnoId },
+        create: { alumnoId, ...d.salud },
+        update: d.salud,
+      });
+
+      if (idsBorrados.length > 0) {
+        await tx.representante.deleteMany({ where: { alumnoId, id: { in: idsBorrados } } });
+      }
+      for (const { id, ...rep } of d.representantes) {
+        if (id) await tx.representante.update({ where: { id, alumnoId }, data: rep });
+        else await tx.representante.create({ data: { ...rep, alumnoId } });
+      }
+
+      await tx.autorizadoRetiro.deleteMany({ where: { alumnoId } });
+      const autorizados = d.autorizados.filter((a) => a.nombre);
+      if (autorizados.length > 0) {
+        await tx.autorizadoRetiro.createMany({
+          data: autorizados.map((a, i) => ({ alumnoId, nombre: a.nombre, cedula: a.cedula, orden: i + 1 })),
+        });
+      }
+
+      await tx.contactoEmergencia.deleteMany({ where: { alumnoId } });
+      const contactos = d.contactos.filter((c) => c.nombre);
+      if (contactos.length > 0) {
+        await tx.contactoEmergencia.createMany({
+          data: contactos.map((c, i) => ({ alumnoId, nombre: c.nombre, telefono: c.telefono, orden: i + 1 })),
+        });
+      }
+    });
+  } catch (e) {
+    return { ok: false, error: parsePrismaError(e) };
+  }
+
+  // En la auditoría se guardan los NOMBRES de los campos cambiados, nunca los
+  // valores (son datos personales de menores y de salud).
+  const camposCambiados = [
+    ...CAMPOS_ALUMNO.filter((c) => !mismoValor(actual[c], datosAlumno[c])),
+    ...CAMPOS_SALUD.filter((c) => !mismoValor(actual.saludAlumno?.[c], d.salud[c])).map((c) => `salud.${c}`),
+  ];
+  await registrarAudit({
+    accion: "ALUMNO_DATOS_ACTUALIZADOS",
+    entidad: "Alumno",
+    entidadId: alumnoId,
+    meta: {
+      camposCambiados,
+      representantes: {
+        editados: d.representantes.filter((r) => r.id).length,
+        agregados: d.representantes.filter((r) => !r.id).length,
+        eliminados: idsBorrados.length,
+      },
+    },
+  });
+
+  revalidatePath("/alumnos");
+  revalidatePath(`/alumnos/${alumnoId}`);
+  return { ok: true };
 }
 
 // ─── Reinscripción ─────────────────────────────────────────────────────────────

@@ -1,7 +1,9 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextRequest, NextResponse } from "next/server";
+import { esRutaAdmin, parseRol } from "@/lib/roles";
 
-const ADMIN_PATHS = ["/configuracion", "/admin"];
+// Filtro previo (optimista). La autorización real se hace dentro de cada
+// server action y route handler con lib/auth.ts.
 
 export async function proxy(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request });
@@ -37,32 +39,29 @@ export async function proxy(request: NextRequest) {
 
   const { pathname } = request.nextUrl;
   const isLoginPage = pathname.startsWith("/login");
+  const isPublic = isLoginPage || pathname.startsWith("/inscripcion/");
+  // Denegar por defecto: una sesión sin rol válido no da acceso a nada.
+  const rol = user ? parseRol(user.app_metadata) : null;
 
-  if (!user) {
+  if (!rol) {
     if (pathname.startsWith("/api/")) {
-      return new NextResponse(JSON.stringify({ error: "No autorizado" }), {
-        status: 401,
-        headers: { "Content-Type": "application/json" },
-      });
+      return NextResponse.json({ error: "No autorizado" }, { status: user ? 403 : 401 });
     }
-    // Rutas públicas — no requieren autenticación
-    if (isLoginPage || pathname.startsWith("/inscripcion/")) {
-      return supabaseResponse;
-    }
-    return NextResponse.redirect(new URL("/login", request.url));
+    if (isPublic) return supabaseResponse;
+    const url = new URL("/login", request.url);
+    if (user) url.searchParams.set("error", "sin_rol");
+    return NextResponse.redirect(url);
   }
 
-  if (user && isLoginPage) {
+  if (isLoginPage) {
     return NextResponse.redirect(new URL("/dashboard", request.url));
   }
 
-  // Rutas solo para ADMIN — usuarios sin rol explícito se tratan como ADMIN
-  // (retrocompatibilidad: los usuarios existentes no tienen rol seteado aún)
-  if (user) {
-    const rol = user.app_metadata?.rol ?? "ADMIN";
-    if (ADMIN_PATHS.some((p) => pathname.startsWith(p)) && rol !== "ADMIN") {
-      return NextResponse.redirect(new URL("/dashboard", request.url));
+  if (esRutaAdmin(pathname) && rol !== "ADMIN") {
+    if (pathname.startsWith("/api/")) {
+      return NextResponse.json({ error: "Prohibido" }, { status: 403 });
     }
+    return NextResponse.redirect(new URL("/dashboard", request.url));
   }
 
   return supabaseResponse;

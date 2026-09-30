@@ -10,7 +10,7 @@ import { useToast } from "@/hooks/use-toast";
 export interface UsuarioResumen {
   id: string;
   email: string;
-  rol: "ADMIN" | "SECRETARIA";
+  rol: "ADMIN" | "SECRETARIA" | null; // null = sin rol: no tiene acceso
   creadoEn: string;
   ultimoAcceso: string | null;
 }
@@ -35,8 +35,9 @@ function FilaUsuario({
 }) {
   const { toast } = useToast();
   const [isPending, startTransition] = useTransition();
+  // Sin rol => se propone el rol de menor privilegio.
   const otroRol: "ADMIN" | "SECRETARIA" =
-    usuario.rol === "ADMIN" ? "SECRETARIA" : "ADMIN";
+    usuario.rol === "SECRETARIA" ? "ADMIN" : "SECRETARIA";
 
   const handleCambioRol = () => {
     startTransition(async () => {
@@ -68,10 +69,10 @@ function FilaUsuario({
       </td>
       <td className="px-4 py-3">
         <Badge
-          variant={usuario.rol === "ADMIN" ? "default" : "secondary"}
+          variant={usuario.rol === "ADMIN" ? "default" : usuario.rol ? "secondary" : "destructive"}
           className="text-xs"
         >
-          {usuario.rol === "ADMIN" ? "Administrador" : "Secretaria"}
+          {usuario.rol === "ADMIN" ? "Administrador" : usuario.rol ? "Secretaria" : "Sin rol (sin acceso)"}
         </Badge>
       </td>
       <td className="px-4 py-3 text-sm text-gray-500 hidden sm:table-cell">
@@ -88,7 +89,7 @@ function FilaUsuario({
             onClick={handleCambioRol}
             disabled={isPending}
           >
-            {isPending ? "..." : `Cambiar a ${otroRol === "ADMIN" ? "Admin" : "Secretaria"}`}
+            {isPending ? "..." : `${usuario.rol ? "Cambiar a" : "Asignar"} ${otroRol === "ADMIN" ? "Admin" : "Secretaria"}`}
           </Button>
         )}
       </td>

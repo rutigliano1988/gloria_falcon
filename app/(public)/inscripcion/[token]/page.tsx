@@ -24,6 +24,7 @@ export default async function InscripcionPage({
 }) {
   const { token } = await params;
   const solicitud = await getSolicitudPorToken(token);
+  const expirada = solicitud?.estado === "PENDIENTE" && !solicitud.vigente;
 
   return (
     <div className="min-h-full">
@@ -41,7 +42,7 @@ export default async function InscripcionPage({
       </div>
 
       <div className="max-w-3xl mx-auto px-4 py-6">
-        {!solicitud ? (
+        {!solicitud || expirada ? (
           <div className="rounded-xl bg-white border border-gray-200 shadow-sm p-8 text-center">
             <p className="text-xl font-bold text-gray-900 mb-2">Enlace inválido</p>
             <p className="text-gray-500">Este enlace no existe o ya expiró. Contacte al colegio para obtener uno nuevo.</p>

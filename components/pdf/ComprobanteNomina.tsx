@@ -72,12 +72,18 @@ export function ComprobanteNomina({ pago, config, logoBase64 }: Props) {
   const nombreDocente = [docente.primerApellido, docente.segundoApellido, docente.primerNombre, docente.segundoNombre].filter(Boolean).join(" ");
   const otrosConceptos = (pago.otrosConceptos as { descripcion: string; montoBs: number }[] | null) ?? [];
   const deducciones = (pago.deducciones as { descripcion: string; montoBs: number }[] | null) ?? [];
-  const tasa = pago.tasaCambio ? Number(pago.tasaCambio.tasa) : null;
+  // Tasa realmente aplicada; en registros antiguos, la tasa oficial asociada.
+  const tasa = pago.tasaAplicada ? Number(pago.tasaAplicada) : pago.tasaCambio ? Number(pago.tasaCambio.tasa) : null;
   const periodo = `${MESES[pago.periodoMes - 1]} ${pago.periodoAno}`;
 
   return (
     <Document>
       <Page size="A4" style={styles.page}>
+        {pago.deletedAt && (
+          <Text style={{ color: "#b91c1c", fontSize: 14, fontFamily: "Helvetica-Bold", textAlign: "center", borderWidth: 2, borderColor: "#b91c1c", padding: 6, marginBottom: 10 }}>
+            ANULADO{pago.motivoAnulacion ? ` — ${pago.motivoAnulacion}` : ""}
+          </Text>
+        )}
         {/* Encabezado */}
         <View style={styles.header}>
           {logoBase64 && <Image src={logoBase64} style={styles.logo} />}

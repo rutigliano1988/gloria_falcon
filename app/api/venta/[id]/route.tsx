@@ -1,5 +1,6 @@
 import { renderToBuffer } from "@react-pdf/renderer";
 import { NextRequest } from "next/server";
+import { authorizeApi } from "@/lib/auth";
 import { getVentaById } from "@/app/(dashboard)/ventas/actions";
 import { getConfigColegio } from "@/app/(dashboard)/mensualidades/actions";
 import { ReciboVenta } from "@/components/pdf/ReciboVenta";
@@ -9,6 +10,9 @@ export async function GET(
   _req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const auth = await authorizeApi();
+  if (auth.response) return auth.response;
+
   const { id } = await params;
 
   const [venta, config] = await Promise.all([

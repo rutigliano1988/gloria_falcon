@@ -1,5 +1,6 @@
 "use server";
 
+import { requireUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { z } from "zod";
 import { registrarAudit } from "@/lib/audit";
@@ -23,6 +24,7 @@ export type ResultadoImport = {
 };
 
 export async function importarAlumnos(formData: FormData): Promise<ResultadoImport> {
+  await requireUser();
   const archivo = formData.get("archivo") as File | null;
   if (!archivo || archivo.size === 0) {
     return { creados: 0, omitidos: 0, errores: [{ fila: 0, mensaje: "No se proporcionó ningún archivo" }] };

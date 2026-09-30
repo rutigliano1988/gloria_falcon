@@ -1,10 +1,12 @@
 "use server";
 
+import { requireUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
 // ─── Lista de alumnos activos (para el selector del reporte de estado de cuenta)
 
 export async function getAlumnosActivos() {
+  await requireUser();
   return prisma.alumno.findMany({
     where: { estado: "ACTIVO" },
     include: {
@@ -21,6 +23,7 @@ export async function getAlumnosActivos() {
 // ─── Estado de cuenta completo de un alumno
 
 export async function getEstadoCuentaAlumno(alumnoId: string) {
+  await requireUser();
   const [alumno, pagos] = await Promise.all([
     prisma.alumno.findUnique({
       where: { id: alumnoId },

@@ -3,7 +3,7 @@
 import { useState, useCallback } from "react";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { Header } from "@/components/layout/Header";
-import type { Rol } from "@/lib/auth";
+import type { Rol } from "@/lib/roles";
 
 interface DashboardShellProps {
   children: React.ReactNode;

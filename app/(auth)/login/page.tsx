@@ -1,12 +1,21 @@
 import Image from "next/image";
 import { signIn } from "./actions";
 
+const MENSAJES_ERROR: Record<string, string> = {
+  credenciales: "Correo o contraseña incorrectos.",
+  no_confirmado: "El correo no ha sido confirmado. Revise su bandeja de entrada.",
+  limite: "Demasiados intentos fallidos. Espere unos minutos e intente de nuevo.",
+  sin_rol: "Su cuenta no tiene un rol asignado. Contacte al administrador del sistema.",
+  desconocido: "Error al iniciar sesión. Verifique sus credenciales.",
+};
+
 export default async function LoginPage({
   searchParams,
 }: {
   searchParams: Promise<{ error?: string }>;
 }) {
   const { error } = await searchParams;
+  const mensajeError = error ? (MENSAJES_ERROR[error] ?? MENSAJES_ERROR.desconocido) : null;
 
   return (
     <div className="w-full max-w-sm">
@@ -30,9 +39,9 @@ export default async function LoginPage({
         </div>
 
         {/* Error */}
-        {error && (
+        {mensajeError && (
           <div className="rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">
-            {decodeURIComponent(error)}
+            {mensajeError}
           </div>
         )}
 

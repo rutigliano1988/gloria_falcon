@@ -250,11 +250,17 @@ export function ReciboPago({ pago, config, logoBase64 }: ReciboPagoProps) {
 
   const totalUsd = Number(pago.montoUsd);
   const totalBs = pago.montoBs ? Number(pago.montoBs) : null;
-  const tasa = pago.tasaCambio ? Number(pago.tasaCambio.tasa) : null;
+  // Tasa realmente aplicada; en registros antiguos, la tasa oficial asociada.
+  const tasa = pago.tasaAplicada ? Number(pago.tasaAplicada) : pago.tasaCambio ? Number(pago.tasaCambio.tasa) : null;
 
   return (
     <Document>
       <Page size="A4" style={styles.page}>
+        {pago.deletedAt && (
+          <Text style={{ color: "#b91c1c", fontSize: 14, fontFamily: "Helvetica-Bold", textAlign: "center", borderWidth: 2, borderColor: "#b91c1c", padding: 6, marginBottom: 10 }}>
+            ANULADO{pago.motivoAnulacion ? ` — ${pago.motivoAnulacion}` : ""}
+          </Text>
+        )}
         {/* Encabezado */}
         <View style={styles.header}>
           {logoBase64 && (
@@ -352,7 +358,7 @@ export function ReciboPago({ pago, config, logoBase64 }: ReciboPagoProps) {
         {totalBs && tasa && (
           <View style={styles.bsTotal}>
             <Text style={styles.bsTotalLabel}>
-              Tasa BCV: {tasa.toFixed(4)} Bs / $1
+              Tasa aplicada: {tasa.toFixed(4)} Bs / $1
             </Text>
             <Text style={styles.bsTotalValue}>
               Equivalente: {fmtBs(totalBs)}

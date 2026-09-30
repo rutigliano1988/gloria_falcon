@@ -1,11 +1,15 @@
 import { renderToBuffer } from "@react-pdf/renderer";
 import { NextRequest } from "next/server";
+import { authorizeApi } from "@/lib/auth";
 import { getContabilidadData } from "@/app/(dashboard)/contabilidad/actions";
 import { getConfigColegio } from "@/app/(dashboard)/mensualidades/actions";
 import { ReporteBalance } from "@/components/pdf/ReporteBalance";
 import { getLogoBase64 } from "@/lib/logo";
 
 export async function GET(req: NextRequest) {
+  const auth = await authorizeApi();
+  if (auth.response) return auth.response;
+
   const mesParam = req.nextUrl.searchParams.get("mes");
   const anoParam = req.nextUrl.searchParams.get("ano");
 

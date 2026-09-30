@@ -44,7 +44,12 @@ export function ReviewForm({ id, anos, grados, secciones, canApprove }: Props) {
   const handleRechazar = () => {
     setAction("rechazar");
     startTransition(async () => {
-      await rechazarSolicitud(id, observaciones);
+      try {
+        await rechazarSolicitud(id, observaciones);
+      } catch {
+        setError("No se pudo rechazar: es posible que la solicitud ya haya sido procesada. Recargue la página.");
+        setAction(null);
+      }
     });
   };
 
@@ -103,6 +108,10 @@ export function ReviewForm({ id, anos, grados, secciones, canApprove }: Props) {
           rows={2} value={observaciones}
           onChange={(e) => setObservaciones(e.target.value)}
           placeholder="Notas internas (opcionales)" />
+        <p className="mt-1 text-xs text-muted-foreground">
+          Al aprobar, los datos pasan a la ficha del alumno; al rechazar, se eliminan. En ambos casos
+          la solicitud solo conserva el nombre del estudiante.
+        </p>
       </div>
 
       <div className="flex gap-3 flex-wrap">

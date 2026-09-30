@@ -15,6 +15,7 @@ import { crearAlumno, type AlumnoFormData } from "../actions";
 import { useToast } from "@/hooks/use-toast";
 import { calcularEdad, parsePrismaError } from "@/lib/utils";
 import type { Grado, Seccion, AnoEscolar } from "@prisma/client";
+import { ESTADOS_VE, RepresentanteCampos, representanteVacio } from "../ficha-campos";
 
 type GradoConSecciones = Grado & { secciones: Seccion[] };
 
@@ -27,13 +28,6 @@ const SERVICIOS = [
   { valor: "ALMUERZO", label: "Almuerzo" },
   { valor: "RESGUARDO", label: "Resguardo" },
   { valor: "TAE_KWON_DO", label: "Tae-Kwon-Do" },
-];
-
-const ESTADOS_VE = [
-  "Amazonas", "Anzoátegui", "Apure", "Aragua", "Barinas", "Bolívar", "Carabobo",
-  "Cojedes", "Delta Amacuro", "Distrito Capital", "Falcón", "Guárico", "Lara",
-  "Mérida", "Miranda", "Monagas", "Nueva Esparta", "Portuguesa", "Sucre",
-  "Táchira", "Trujillo", "La Guaira", "Yaracuy", "Zulia",
 ];
 
 const defaultContacto = { nombre: "", telefono: "" };
@@ -77,14 +71,8 @@ export function FichaAlumnoForm({ grados, anos }: Props) {
     descuentoObservacion: "",
   });
 
-  const [madre, setMadre] = useState({
-    apellidosNombres: "", fechaNacimiento: "", cedula: "", telefonoHab: "",
-    telefonoCelular: "", ocupacion: "", telefonoOficina: "", email: "",
-  });
-  const [padre, setPadre] = useState({
-    apellidosNombres: "", fechaNacimiento: "", cedula: "", telefonoHab: "",
-    telefonoCelular: "", ocupacion: "", telefonoOficina: "", email: "",
-  });
+  const [madre, setMadre] = useState(representanteVacio);
+  const [padre, setPadre] = useState(representanteVacio);
   const [contactos, setContactos] = useState([
     { ...defaultContacto }, { ...defaultContacto }, { ...defaultContacto },
   ]);
@@ -92,8 +80,6 @@ export function FichaAlumnoForm({ grados, anos }: Props) {
 
   const gradoSeleccionado = grados.find((g) => g.id === form.gradoId);
   const edad = form.fechaNacimiento ? calcularEdad(new Date(form.fechaNacimiento)) : null;
-  const edadMadre = madre.fechaNacimiento ? calcularEdad(new Date(madre.fechaNacimiento)) : null;
-  const edadPadre = padre.fechaNacimiento ? calcularEdad(new Date(padre.fechaNacimiento)) : null;
 
   const toggleServicio = (valor: string) => {
     setServicios((prev) =>
@@ -306,80 +292,16 @@ export function FichaAlumnoForm({ grados, anos }: Props) {
       {/* ─── Datos de la Madre ─── */}
       <Card>
         <CardHeader><CardTitle className="text-base">Datos de la Madre</CardTitle></CardHeader>
-        <CardContent className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <div className="sm:col-span-2">
-            <Label>Apellidos y Nombres</Label>
-            <Input value={madre.apellidosNombres} onChange={(e) => setMadre({ ...madre, apellidosNombres: e.target.value })} />
-          </div>
-          <div>
-            <Label>C.I.</Label>
-            <Input value={madre.cedula} onChange={(e) => setMadre({ ...madre, cedula: e.target.value })} />
-          </div>
-          <div>
-            <Label>Fecha de Nacimiento {madre.apellidosNombres && <span className="text-destructive">*</span>}</Label>
-            <DatePicker value={madre.fechaNacimiento} onChange={(v) => setMadre({ ...madre, fechaNacimiento: v })} />
-            {edadMadre !== null && <p className="text-xs text-muted-foreground mt-1">Edad: {edadMadre} años</p>}
-          </div>
-          <div>
-            <Label>Teléfono de Habitación</Label>
-            <Input value={madre.telefonoHab} onChange={(e) => setMadre({ ...madre, telefonoHab: e.target.value })} />
-          </div>
-          <div>
-            <Label>Teléfono Celular</Label>
-            <Input value={madre.telefonoCelular} onChange={(e) => setMadre({ ...madre, telefonoCelular: e.target.value })} />
-          </div>
-          <div>
-            <Label>Ocupación</Label>
-            <Input value={madre.ocupacion} onChange={(e) => setMadre({ ...madre, ocupacion: e.target.value })} />
-          </div>
-          <div>
-            <Label>Teléfono de Oficina</Label>
-            <Input value={madre.telefonoOficina} onChange={(e) => setMadre({ ...madre, telefonoOficina: e.target.value })} />
-          </div>
-          <div>
-            <Label>Correo Electrónico</Label>
-            <Input type="email" value={madre.email} onChange={(e) => setMadre({ ...madre, email: e.target.value })} />
-          </div>
+        <CardContent>
+          <RepresentanteCampos valor={madre} onChange={setMadre} fechaObligatoria />
         </CardContent>
       </Card>
 
       {/* ─── Datos del Padre ─── */}
       <Card>
         <CardHeader><CardTitle className="text-base">Datos del Padre</CardTitle></CardHeader>
-        <CardContent className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <div className="sm:col-span-2">
-            <Label>Apellidos y Nombres</Label>
-            <Input value={padre.apellidosNombres} onChange={(e) => setPadre({ ...padre, apellidosNombres: e.target.value })} />
-          </div>
-          <div>
-            <Label>C.I.</Label>
-            <Input value={padre.cedula} onChange={(e) => setPadre({ ...padre, cedula: e.target.value })} />
-          </div>
-          <div>
-            <Label>Fecha de Nacimiento {padre.apellidosNombres && <span className="text-destructive">*</span>}</Label>
-            <DatePicker value={padre.fechaNacimiento} onChange={(v) => setPadre({ ...padre, fechaNacimiento: v })} />
-            {edadPadre !== null && <p className="text-xs text-muted-foreground mt-1">Edad: {edadPadre} años</p>}
-          </div>
-          <div>
-            <Label>Teléfono de Habitación</Label>
-            <Input value={padre.telefonoHab} onChange={(e) => setPadre({ ...padre, telefonoHab: e.target.value })} />
-          </div>
-          <div>
-            <Label>Teléfono Celular</Label>
-            <Input value={padre.telefonoCelular} onChange={(e) => setPadre({ ...padre, telefonoCelular: e.target.value })} />
-          </div>
-          <div>
-            <Label>Ocupación</Label>
-            <Input value={padre.ocupacion} onChange={(e) => setPadre({ ...padre, ocupacion: e.target.value })} />
-          </div>
-          <div>
-            <Label>Teléfono de Oficina</Label>
-            <Input value={padre.telefonoOficina} onChange={(e) => setPadre({ ...padre, telefonoOficina: e.target.value })} />
-          </div>
-          <div>
-            <Label>Correo Electrónico</Label>
-            <Input type="email" value={padre.email} onChange={(e) => setPadre({ ...padre, email: e.target.value })} />
-          </div>
+        <CardContent>
+          <RepresentanteCampos valor={padre} onChange={setPadre} fechaObligatoria />
         </CardContent>
       </Card>
 

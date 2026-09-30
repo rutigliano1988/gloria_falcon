@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { totalesPeriodo } from "@/lib/reportes";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Users, TrendingUp, TrendingDown, AlertCircle } from "lucide-react";
@@ -30,28 +31,16 @@ async function getDashboardData() {
   const inicioMes = new Date(hoy.getFullYear(), hoy.getMonth(), 1);
   const finMes = new Date(hoy.getFullYear(), hoy.getMonth() + 1, 0, 23, 59, 59);
 
-  const [ingresosMes, egresosMes] = await Promise.all([
-    prisma.pago.aggregate({
-      where: { fechaPago: { gte: inicioMes, lte: finMes } },
-      _sum: { montoUsd: true },
-    }),
-    prisma.egreso.aggregate({
-      where: { fecha: { gte: inicioMes, lte: finMes } },
-      _sum: { montoUsd: true },
-    }),
-  ]);
-
-  const ingresos = Number(ingresosMes._sum.montoUsd ?? 0);
-  const egresos = Number(egresosMes._sum.montoUsd ?? 0);
+  const totales = await totalesPeriodo(inicioMes, finMes);
 
   return {
     totalActivos,
     totalRetirados,
     totalEgresados,
     anoActivo,
-    ingresosMes: ingresos,
-    egresosMes: egresos,
-    balanceMes: ingresos - egresos,
+    ingresosMes: totales.ingresosUsd,
+    egresosMes: totales.egresosUsd,
+    balanceMes: totales.balanceUsd,
   };
 }
 
@@ -64,19 +53,10 @@ async function getUltimos6MesesData(): Promise<BalanceDataPoint[]> {
       const fin = new Date(d.getFullYear(), d.getMonth() + 1, 0, 23, 59, 59);
       const label = `${MESES_CORTO[d.getMonth()]} ${String(d.getFullYear()).slice(-2)}`;
 
-      return Promise.all([
-        prisma.pago.aggregate({
-          where: { fechaPago: { gte: inicio, lte: fin }, deletedAt: null },
-          _sum: { montoUsd: true },
-        }),
-        prisma.egreso.aggregate({
-          where: { fecha: { gte: inicio, lte: fin }, deletedAt: null },
-          _sum: { montoUsd: true },
-        }),
-      ]).then(([ing, egr]) => ({
+      return totalesPeriodo(inicio, fin).then((t) => ({
         mes: label,
-        ingresos: Number(ing._sum.montoUsd ?? 0),
-        egresos: Number(egr._sum.montoUsd ?? 0),
+        ingresos: t.ingresosUsd,
+        egresos: t.egresosUsd,
       }));
     })
   );

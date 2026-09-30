@@ -5,7 +5,9 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { getVentaById } from "../actions";
-import { getConfigColegio } from "@/app/(dashboard)/mensualidades/actions";
+import { getConfigColegio, anularPago } from "@/app/(dashboard)/mensualidades/actions";
+import { AnularButton } from "@/components/AnularButton";
+import { requireUser } from "@/lib/auth";
 import { formatUSD, formatBS, formatFecha, FORMA_PAGO_LABELS } from "@/lib/utils";
 
 const TIPO_LABELS: Record<string, string> = {
@@ -19,16 +21,18 @@ export default async function DetalleVentaPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const [venta, config] = await Promise.all([
+  const [venta, config, usuario] = await Promise.all([
     getVentaById(id),
     getConfigColegio(),
+    requireUser(),
   ]);
 
-  if (!venta) notFound();
+  // Esta vista es solo para ventas e ingresos manuales (antes mostraba cualquier pago).
+  if (!venta || (venta.tipo !== "VENTA" && venta.tipo !== "INGRESO_MANUAL")) notFound();
 
   const totalUsd = Number(venta.montoUsd);
   const totalBs = venta.montoBs ? Number(venta.montoBs) : null;
-  const tasa = venta.tasaCambio ? Number(venta.tasaCambio.tasa) : null;
+  const tasa = venta.tasaAplicada ? Number(venta.tasaAplicada) : venta.tasaCambio ? Number(venta.tasaCambio.tasa) : null;
 
   return (
     <div className="max-w-2xl mx-auto space-y-5">
@@ -53,14 +57,26 @@ export default async function DetalleVentaPage({
             <p className="text-sm text-gray-500">{formatFecha(venta.fechaPago)}</p>
           </div>
         </div>
+        <div className="flex gap-2">
+        {usuario.rol === "ADMIN" && !venta.deletedAt && (
+          <AnularButton accion={anularPago.bind(null, venta.id)} descripcion={`el recibo ${venta.numeroRecibo ?? ""}`} />
+        )}
         <a href={`/api/venta/${venta.id}`} target="_blank" rel="noreferrer">
           <Button variant="outline" size="sm">
             <FileText className="h-4 w-4 mr-2" />
             Descargar PDF
           </Button>
         </a>
+        </div>
       </div>
 
+
+      {venta.deletedAt && (
+        <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-800">
+          <p className="font-semibold">ANULADO el {formatFecha(venta.deletedAt)}{venta.anuladoPor ? ` por ${venta.anuladoPor}` : ""}</p>
+          {venta.motivoAnulacion && <p className="mt-1">Motivo: {venta.motivoAnulacion}</p>}
+        </div>
+      )}
       {/* Datos colegio */}
       {config && (
         <div className="rounded-lg border border-gray-200 bg-white p-4">
@@ -123,7 +139,7 @@ export default async function DetalleVentaPage({
           </div>
           {tasa && (
             <div>
-              <p className="text-xs text-gray-400 uppercase mb-0.5">Tasa BCV</p>
+              <p className="text-xs text-gray-400 uppercase mb-0.5">Tasa aplicada</p>
               <p className="text-sm font-medium">{tasa.toFixed(4)} Bs/$1</p>
             </div>
           )}

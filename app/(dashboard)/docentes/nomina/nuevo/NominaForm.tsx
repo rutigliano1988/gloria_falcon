@@ -1,11 +1,12 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { DatePicker } from "@/components/ui/date-picker";
 import { useToast } from "@/hooks/use-toast";
-import { formatBS, calcularBs, FORMA_PAGO_LABELS, MESES, parsePrismaError } from "@/lib/utils";
+import { formatBS, FORMA_PAGO_LABELS, MESES } from "@/lib/utils";
+import { calcularTotalNomina, montoBsDesdeUsd } from "@/lib/finanzas";
 import { registrarPagoNomina } from "../../actions";
 import type { getNominaFormData } from "../../actions";
 
@@ -33,28 +34,30 @@ export function NominaForm({ docentes, tasaActual, docenteIdInicial }: Props) {
   const [baseBs, setBaseBs] = useState("");
   const [bonoUsd, setBonoUsd] = useState("");
   const [tasa, setTasa] = useState(tasaActual ? Number(tasaActual.tasa).toFixed(4) : "");
-  const [bonoBsManual, setBonoBsManual] = useState("");
+  // null = automático (bono USD × tasa); string = ajuste manual del usuario.
+  const [bonoBsManual, setBonoBsManual] = useState<string | null>(null);
   const [otros, setOtros] = useState<ConceptoExtra[]>([]);
   const [deducciones, setDeducciones] = useState<ConceptoExtra[]>([]);
   const [formaPago, setFormaPago] = useState("EFECTIVO_BS");
   const [numeroReferencia, setNumeroReferencia] = useState("");
-  const [fechaPago, setFechaPago] = useState(hoy.toISOString().split("T")[0]);
+  const [fechaPago, setFechaPago] = useState(
+    `${hoy.getFullYear()}-${String(hoy.getMonth() + 1).padStart(2, "0")}-${String(hoy.getDate()).padStart(2, "0")}`
+  );
   const [loading, setLoading] = useState(false);
 
-  // Auto-calcular bono en Bs cuando cambia USD o tasa
-  useEffect(() => {
-    const usd = parseFloat(bonoUsd);
-    const t = parseFloat(tasa);
-    if (!isNaN(usd) && !isNaN(t) && usd > 0 && t > 0) {
-      setBonoBsManual(calcularBs(usd, t).toFixed(2));
-    }
-  }, [bonoUsd, tasa]);
-
   const baseNum = parseFloat(baseBs) || 0;
-  const bonoBsNum = parseFloat(bonoBsManual) || 0;
-  const otrosTotalBs = otros.reduce((s, c) => s + (c.montoBs || 0), 0);
-  const deduccionesTotalBs = deducciones.reduce((s, c) => s + (c.montoBs || 0), 0);
-  const totalBs = baseNum + bonoBsNum + otrosTotalBs - deduccionesTotalBs;
+  const bonoUsdNum = parseFloat(bonoUsd) || 0;
+  const tasaNum = parseFloat(tasa) || 0;
+  const bonoBsAuto = bonoUsdNum > 0 && tasaNum > 0 ? montoBsDesdeUsd(bonoUsdNum, tasaNum) : 0;
+  // Sin bono en USD no hay bono en Bs: antes quedaba un monto oculto sumando al total (M10).
+  const bonoBsNum = bonoUsdNum > 0 ? (bonoBsManual !== null ? parseFloat(bonoBsManual) || 0 : bonoBsAuto) : 0;
+  // Mismo cálculo que hace el servidor al guardar.
+  const totalBs = calcularTotalNomina({
+    baseBs: baseNum,
+    bonoBs: bonoBsNum,
+    otros: otros.filter((c) => c.descripcion && c.montoBs > 0),
+    deducciones: deducciones.filter((c) => c.descripcion && c.montoBs > 0),
+  });
 
   const addOtro = () => setOtros([...otros, { descripcion: "", montoBs: 0 }]);
   const addDeduccion = () => setDeducciones([...deducciones, { descripcion: "", montoBs: 0 }]);
@@ -64,6 +67,7 @@ export function NominaForm({ docentes, tasaActual, docenteIdInicial }: Props) {
   const handleSubmit = async () => {
     if (!docenteId) { toast({ title: "Selecciona un docente", variant: "destructive" }); return; }
     if (baseNum <= 0) { toast({ title: "La base en Bs debe ser mayor a 0", variant: "destructive" }); return; }
+    if (tasaNum <= 0) { toast({ title: "Indica la tasa de cambio del día", variant: "destructive" }); return; }
     if (requiereRef && !numeroReferencia.trim()) {
       toast({ title: "El número de referencia es obligatorio", variant: "destructive" }); return;
     }
@@ -75,22 +79,25 @@ export function NominaForm({ docentes, tasaActual, docenteIdInicial }: Props) {
         periodoMes,
         periodoAno,
         baseBs: baseNum,
-        bonoUsd: parseFloat(bonoUsd) || null,
-        bonoBsEquivalente: bonoBsNum || null,
-        tasaCambioId: tasaActual?.id ?? null,
-        otrosConceptos: otros.filter((c) => c.descripcion && c.montoBs),
-        deducciones: deducciones.filter((c) => c.descripcion && c.montoBs),
-        totalBs,
+        bonoUsd: bonoUsdNum > 0 ? bonoUsdNum : null,
+        bonoBsEquivalente: bonoUsdNum > 0 ? bonoBsNum : null,
+        tasaAplicada: tasaNum,
+        otrosConceptos: otros.filter((c) => c.descripcion && c.montoBs > 0),
+        deducciones: deducciones.filter((c) => c.descripcion && c.montoBs > 0),
         formaPago: formaPago as "EFECTIVO_USD" | "EFECTIVO_BS" | "PAGO_MOVIL_BS" | "TRANSFERENCIA_BS",
         numeroReferencia: numeroReferencia.trim() || null,
         fechaPago,
       });
+      if (!result.ok) {
+        toast({ title: "No se pudo registrar", description: result.error, variant: "destructive" });
+        return;
+      }
       toast({ title: "Nómina registrada" });
       router.push(`/docentes/nomina/${result.pagoId}`);
-    } catch (e) {
+    } catch {
       toast({
         title: "Error al registrar",
-        description: parsePrismaError(e),
+        description: "Intenta de nuevo.",
         variant: "destructive",
       });
     } finally {
@@ -165,34 +172,38 @@ export function NominaForm({ docentes, tasaActual, docenteIdInicial }: Props) {
               <label className="block text-xs font-medium text-gray-600 mb-1.5">Bono (USD)</label>
               <input
                 type="number" step="0.01" value={bonoUsd}
-                onChange={(e) => setBonoUsd(e.target.value)}
+                onChange={(e) => {
+                  setBonoUsd(e.target.value);
+                  setBonoBsManual(null);
+                }}
                 placeholder="0.00"
                 className="w-full border border-gray-200 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
             </div>
-            {bonoUsd && (
-              <>
-                <div>
-                  <label className="block text-xs font-medium text-gray-600 mb-1.5">
-                    Tasa BCV (Bs/$1)
-                  </label>
-                  <input
-                    type="number" step="0.0001" value={tasa}
-                    onChange={(e) => setTasa(e.target.value)}
-                    className="w-full border border-gray-200 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-gray-600 mb-1.5">
-                    Bono en Bs (editable)
-                  </label>
-                  <input
-                    type="number" step="0.01" value={bonoBsManual}
-                    onChange={(e) => setBonoBsManual(e.target.value)}
-                    className="w-full border border-gray-200 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
-                </div>
-              </>
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1.5">
+                Tasa del día (Bs/$1) *
+              </label>
+              <input
+                type="number" step="0.0001" value={tasa}
+                onChange={(e) => {
+                  setTasa(e.target.value);
+                  setBonoBsManual(null);
+                }}
+                className="w-full border border-gray-200 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+            {bonoUsdNum > 0 && (
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1.5">
+                  Bono en Bs (editable)
+                </label>
+                <input
+                  type="number" step="0.01" value={bonoBsManual ?? bonoBsAuto.toFixed(2)}
+                  onChange={(e) => setBonoBsManual(e.target.value)}
+                  className="w-full border border-gray-200 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
             )}
           </div>
 

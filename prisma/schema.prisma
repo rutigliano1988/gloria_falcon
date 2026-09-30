@@ -303,7 +303,12 @@ model Pago {
   fechaPago        DateTime   @default(now())
   observaciones    String?
   numeroRecibo     String?    @unique
+  // Tasa Bs/USD realmente aplicada (puede diferir de tasaCambio si se ajustó al cobrar).
+  tasaAplicada     Decimal?   @db.Decimal(12, 4)
+  // Anulación (soft delete): el recibo conserva su número y queda marcado.
   deletedAt        DateTime?
+  anuladoPor       String?
+  motivoAnulacion  String?
 
   alumno     Alumno?     @relation(fields: [alumnoId], references: [id])
   anoEscolar AnoEscolar? @relation(fields: [anoEscolarId], references: [id])
@@ -340,7 +345,10 @@ model PagoDocente {
   numeroReferencia  String?
   fechaPago         DateTime  @default(now())
   totalBs           Decimal   @db.Decimal(14, 2)
+  tasaAplicada      Decimal?  @db.Decimal(12, 4)
   deletedAt         DateTime?
+  anuladoPor        String?
+  motivoAnulacion   String?
 
   docente    Docente     @relation(fields: [docenteId], references: [id])
   tasaCambio TasaCambio? @relation(fields: [tasaCambioId], references: [id])
@@ -361,7 +369,12 @@ model Egreso {
   numeroFactura     String?
   fecha             DateTime   @default(now())
   pagoDocenteId     String?
+  // Siempre se guarda el equivalente en USD con la tasa del día (montoUsd) y la tasa usada.
+  tasaAplicada      Decimal?   @db.Decimal(12, 4)
+  numeroReferencia  String?
   deletedAt         DateTime?
+  anuladoPor        String?
+  motivoAnulacion   String?
 
   categoriaEgreso CategoriaEgreso @relation(fields: [categoriaEgresoId], references: [id])
   tasaCambio      TasaCambio?     @relation(fields: [tasaCambioId], references: [id])
@@ -409,8 +422,10 @@ enum EstadoSolicitud {
 
 model SolicitudInscripcion {
   id                  String          @id @default(cuid())
-  token               String          @unique @default(cuid())
+  // Token aleatorio de 256 bits generado en generarEnlaceSolicitud (no cuid: no es un secreto).
+  token               String          @unique
   estado              EstadoSolicitud @default(PENDIENTE)
+  expiraEn            DateTime?
 
   // Datos del alumno — llenados por el padre/representante
   primerApellido      String?

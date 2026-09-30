@@ -1,32 +1,35 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
+import { parseRol } from "@/lib/roles";
 import { redirect } from "next/navigation";
 
-function traducirError(mensaje: string): string {
+// Se redirige con un código, no con texto libre: la página solo muestra
+// mensajes fijos (evita inyectar texto arbitrario en el login).
+function codigoError(mensaje: string): string {
   const m = mensaje.toLowerCase();
   if (m.includes("invalid login credentials") || m.includes("invalid credentials"))
-    return "Correo o contraseña incorrectos.";
-  if (m.includes("email not confirmed"))
-    return "El correo no ha sido confirmado. Revise su bandeja de entrada.";
-  if (m.includes("too many requests") || m.includes("rate limit"))
-    return "Demasiados intentos fallidos. Espere unos minutos e intente de nuevo.";
-  if (m.includes("user not found"))
-    return "No existe una cuenta con ese correo.";
-  if (m.includes("signup is disabled"))
-    return "El registro de nuevas cuentas está desactivado.";
-  return "Error al iniciar sesión. Verifique sus credenciales.";
+    return "credenciales";
+  if (m.includes("email not confirmed")) return "no_confirmado";
+  if (m.includes("too many requests") || m.includes("rate limit")) return "limite";
+  return "desconocido";
 }
 
 export async function signIn(formData: FormData) {
-  const email = formData.get("email") as string;
-  const password = formData.get("password") as string;
+  const email = String(formData.get("email") ?? "");
+  const password = String(formData.get("password") ?? "");
 
   const supabase = await createClient();
-  const { error } = await supabase.auth.signInWithPassword({ email, password });
+  const { data, error } = await supabase.auth.signInWithPassword({ email, password });
 
   if (error) {
-    redirect(`/login?error=${encodeURIComponent(traducirError(error.message))}`);
+    redirect(`/login?error=${codigoError(error.message)}`);
+  }
+
+  // Una cuenta sin rol asignado no puede entrar (denegar por defecto).
+  if (!parseRol(data.user?.app_metadata)) {
+    await supabase.auth.signOut();
+    redirect("/login?error=sin_rol");
   }
 
   redirect("/dashboard");

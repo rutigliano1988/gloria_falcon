@@ -15,9 +15,23 @@ interface DatePickerProps {
   placeholder?: string;
   className?: string;
   disabled?: boolean;
+  /** Primer año seleccionable (por defecto, 1930: cubre fechas de nacimiento de representantes). */
+  fromYear?: number;
+  /** Último año seleccionable (por defecto, el próximo año). */
+  toYear?: number;
 }
 
-export function DatePicker({ value, onChange, placeholder = "Seleccionar fecha", className, disabled }: DatePickerProps) {
+const ANIO_ACTUAL = new Date().getFullYear();
+
+export function DatePicker({
+  value,
+  onChange,
+  placeholder = "Seleccionar fecha",
+  className,
+  disabled,
+  fromYear = 1930,
+  toYear = ANIO_ACTUAL + 1,
+}: DatePickerProps) {
   const [open, setOpen] = useState(false);
 
   const selected = value ? parseISO(value) : undefined;
@@ -51,6 +65,10 @@ export function DatePicker({ value, onChange, placeholder = "Seleccionar fecha",
             setOpen(false);
           }}
           defaultMonth={selected}
+          // Selectores de mes y año: sin esto, llegar a 1985 exigía ~500 clics.
+          captionLayout="dropdown"
+          startMonth={new Date(fromYear, 0)}
+          endMonth={new Date(toYear, 11)}
         />
       </PopoverContent>
     </Popover>

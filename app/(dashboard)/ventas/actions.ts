@@ -1,5 +1,8 @@
 "use server";
 
+import { requireUser } from "@/lib/auth";
+import { registrarAudit } from "@/lib/audit";
+import { montoBsDesdeUsd, redondear2, totalConceptos } from "@/lib/finanzas";
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
@@ -23,28 +26,30 @@ export type VentaResumen = {
 // ─── Schema ───────────────────────────────────────────────────────────────────
 
 const conceptoVentaSchema = z.object({
-  concepto: z.string().min(1),
-  montoUsd: z.number(),
+  concepto: z.string().trim().min(1, "Describe cada concepto").max(80),
+  montoUsd: z.number().positive("Cada concepto debe ser mayor a 0").max(100000),
 });
 
+// El total y el monto en Bs los calcula el servidor a partir de los conceptos.
 const registrarVentaSchema = z.object({
   tipo: z.enum(["VENTA", "INGRESO_MANUAL"]),
-  montoUsd: z.number().positive("El monto debe ser mayor a 0"),
-  montoBs: z.number().nonnegative().nullable(),
-  tasaCambioId: z.string().nullable(),
+  tasaAplicada: z.number().positive().max(10_000_000).nullable(),
   monedaPagada: z.enum(["USD", "BS"]),
   formaPago: z.enum(["EFECTIVO_USD", "EFECTIVO_BS", "PAGO_MOVIL_BS", "TRANSFERENCIA_BS"]),
-  numeroReferencia: z.string().nullable(),
-  fechaPago: z.string().min(1),
-  observaciones: z.string().nullable(),
-  conceptos: z.array(conceptoVentaSchema).min(1, "Agrega al menos un concepto"),
+  numeroReferencia: z.string().trim().max(60).nullable(),
+  fechaPago: z.iso.date("Fecha inválida"),
+  observaciones: z.string().trim().max(500).nullable(),
+  conceptos: z.array(conceptoVentaSchema).min(1, "Agrega al menos un concepto").max(30),
 });
 
 export type RegistrarVentaInput = z.infer<typeof registrarVentaSchema>;
 
+class ErrorValidacion extends Error {}
+
 // ─── Fetch principal ──────────────────────────────────────────────────────────
 
 export async function getVentasData(tipo?: string) {
+  await requireUser();
   const tipoFiltro =
     tipo === "VENTA"
       ? "VENTA"
@@ -105,6 +110,7 @@ export async function getVentasData(tipo?: string) {
 // ─── Datos para el formulario ─────────────────────────────────────────────────
 
 export async function getVentaFormData() {
+  await requireUser();
   const [productos, tasaActual] = await Promise.all([
     prisma.producto.findMany({
       where: { activo: true },
@@ -117,78 +123,121 @@ export async function getVentaFormData() {
 
 // ─── Registrar venta / ingreso ────────────────────────────────────────────────
 
-export async function registrarVenta(data: RegistrarVentaInput) {
-  const parsed = registrarVentaSchema.parse(data);
+export async function registrarVenta(
+  data: RegistrarVentaInput
+): Promise<{ ok: true; pagoId: string; numeroRecibo: string } | { ok: false; error: string }> {
+  const usuario = await requireUser();
+  const parsed = registrarVentaSchema.safeParse(data);
+  if (!parsed.success) return { ok: false, error: parsed.error.issues.map((i) => i.message).join(" · ") };
+  const d = parsed.data;
 
-  const ano = new Date(parsed.fechaPago).getFullYear();
-  const prefijo = `V-${ano}-`;
+  if ((d.monedaPagada === "USD") !== (d.formaPago === "EFECTIVO_USD")) {
+    return { ok: false, error: "La forma de pago no corresponde a la moneda." };
+  }
+  const referencia = d.numeroReferencia || null;
+  if (["PAGO_MOVIL_BS", "TRANSFERENCIA_BS"].includes(d.formaPago) && !referencia) {
+    return { ok: false, error: "El número de referencia es obligatorio para este tipo de pago." };
+  }
+  if (d.monedaPagada === "BS" && !d.tasaAplicada) return { ok: false, error: "Ingresa la tasa de cambio aplicada." };
+  const fechaPago = new Date(d.fechaPago);
+  if (fechaPago.getTime() > Date.now() + 36 * 60 * 60 * 1000) {
+    return { ok: false, error: "La fecha no puede ser futura." };
+  }
+
+  const conceptos = d.conceptos.map((c) => ({ concepto: c.concepto, montoUsd: redondear2(c.montoUsd) }));
+  const montoUsd = totalConceptos(conceptos);
+  const tasaAplicada = d.monedaPagada === "BS" ? d.tasaAplicada! : null;
+  const montoBs = tasaAplicada ? montoBsDesdeUsd(montoUsd, tasaAplicada) : null;
+  const tasaOficial = await prisma.tasaCambio.findFirst({ orderBy: { fechaRegistro: "desc" } });
+
+  const prefijo = `V-${fechaPago.getUTCFullYear()}-`;
 
   let result!: { pagoId: string; numeroRecibo: string };
-  for (let intento = 0; intento < 3; intento++) {
-    try {
-      result = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
-        const ultimoRecibo = await tx.pago.findFirst({
-          where: {
-            tipo: { in: ["VENTA", "INGRESO_MANUAL"] },
-            numeroRecibo: { startsWith: prefijo },
-          },
-          orderBy: { numeroRecibo: "desc" },
+  try {
+    for (let intento = 0; intento < 3; intento++) {
+      try {
+        result = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+          if (referencia) {
+            const repetida = await tx.pago.findFirst({
+              where: { formaPago: d.formaPago, numeroReferencia: referencia, deletedAt: null },
+              select: { numeroRecibo: true },
+            });
+            if (repetida) {
+              throw new ErrorValidacion(
+                `La referencia ${referencia} ya se usó en el recibo ${repetida.numeroRecibo ?? "(sin número)"}.`
+              );
+            }
+          }
+
+          const ultimoRecibo = await tx.pago.findFirst({
+            where: {
+              tipo: { in: ["VENTA", "INGRESO_MANUAL"] },
+              numeroRecibo: { startsWith: prefijo },
+            },
+            orderBy: { numeroRecibo: "desc" },
+          });
+
+          let nextNum = 1;
+          if (ultimoRecibo?.numeroRecibo) {
+            const partes = ultimoRecibo.numeroRecibo.split("-");
+            const ultimo = parseInt(partes[partes.length - 1]);
+            if (!isNaN(ultimo)) nextNum = ultimo + 1;
+          }
+          const numeroRecibo = `${prefijo}${String(nextNum).padStart(4, "0")}`;
+
+          const pago = await tx.pago.create({
+            data: {
+              tipo: d.tipo,
+              alumnoId: null,
+              anoEscolarId: null,
+              montoUsd,
+              montoBs,
+              tasaAplicada,
+              tasaCambioId: tasaOficial?.id ?? null,
+              monedaPagada: d.monedaPagada,
+              formaPago: d.formaPago,
+              numeroReferencia: referencia,
+              fechaPago,
+              observaciones: d.observaciones || null,
+              numeroRecibo,
+            },
+          });
+
+          await tx.conceptoPago.createMany({
+            data: conceptos.map((c) => ({ pagoId: pago.id, concepto: c.concepto, mesAno: null, montoUsd: c.montoUsd })),
+          });
+
+          return { pagoId: pago.id, numeroRecibo };
         });
-
-        let nextNum = 1;
-        if (ultimoRecibo?.numeroRecibo) {
-          const partes = ultimoRecibo.numeroRecibo.split("-");
-          const ultimo = parseInt(partes[partes.length - 1]);
-          if (!isNaN(ultimo)) nextNum = ultimo + 1;
-        }
-        const numeroRecibo = `${prefijo}${String(nextNum).padStart(4, "0")}`;
-
-        const pago = await tx.pago.create({
-          data: {
-            tipo: parsed.tipo,
-            alumnoId: null,
-            anoEscolarId: null,
-            montoUsd: parsed.montoUsd,
-            montoBs: parsed.montoBs,
-            tasaCambioId: parsed.tasaCambioId,
-            monedaPagada: parsed.monedaPagada,
-            formaPago: parsed.formaPago,
-            numeroReferencia: parsed.numeroReferencia,
-            fechaPago: new Date(parsed.fechaPago),
-            observaciones: parsed.observaciones,
-            numeroRecibo,
-          },
-        });
-
-        await tx.conceptoPago.createMany({
-          data: parsed.conceptos.map((c) => ({
-            pagoId: pago.id,
-            concepto: c.concepto,
-            mesAno: null,
-            montoUsd: c.montoUsd,
-          })),
-        });
-
-        return { pagoId: pago.id, numeroRecibo };
-      });
-      break;
-    } catch (e) {
-      const esColision =
-        e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002";
-      if (esColision && intento < 2) continue;
-      throw e;
+        break;
+      } catch (e) {
+        const esColision = e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002";
+        if (esColision && intento < 2) continue;
+        throw e;
+      }
     }
+  } catch (e) {
+    if (e instanceof ErrorValidacion) return { ok: false, error: e.message };
+    throw e;
   }
+
+  await registrarAudit({
+    accion: "VENTA_REGISTRADA",
+    entidad: "Pago",
+    entidadId: result.pagoId,
+    meta: { numeroRecibo: result.numeroRecibo, montoUsd, tipo: d.tipo, registradoPor: usuario.email },
+  });
 
   revalidatePath("/ventas");
   revalidatePath("/dashboard");
 
-  return result;
+  return { ok: true, ...result };
 }
 
 // ─── Detalle de una venta ──────────────────────────────────────────────────────
 
 export async function getVentaById(id: string) {
+  await requireUser();
   return prisma.pago.findUnique({
     where: { id },
     include: {

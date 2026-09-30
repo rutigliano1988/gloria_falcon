@@ -21,9 +21,10 @@ type Docente = {
 
 interface Props {
   docentes: Docente[];
+  puedeVerNomina: boolean;
 }
 
-export function DocentesTable({ docentes }: Props) {
+export function DocentesTable({ docentes, puedeVerNomina }: Props) {
   const [busqueda, setBusqueda] = useState("");
 
   const filtrados = docentes.filter((d) => {
@@ -89,9 +90,11 @@ export function DocentesTable({ docentes }: Props) {
                         <Link href={`/docentes/${d.id}`}>
                           <Button size="sm" variant="outline">Ver</Button>
                         </Link>
-                        <Link href={`/docentes/nomina/nuevo?docenteId=${d.id}`}>
-                          <Button size="sm" variant="ghost">Nómina</Button>
-                        </Link>
+                        {puedeVerNomina && (
+                          <Link href={`/docentes/nomina/nuevo?docenteId=${d.id}`}>
+                            <Button size="sm" variant="ghost">Nómina</Button>
+                          </Link>
+                        )}
                       </div>
                     </td>
                   </tr>

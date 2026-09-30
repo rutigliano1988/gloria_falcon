@@ -50,12 +50,14 @@ export default async function DetalleDocentePage({
           </div>
         </div>
         <div className="flex gap-2">
-          <Link href={`/docentes/nomina/nuevo?docenteId=${docente.id}`}>
-            <Button size="sm">
-              <FileText className="h-4 w-4 mr-1" />
-              Registrar Nómina
-            </Button>
-          </Link>
+          {docente.puedeVerNomina && (
+            <Link href={`/docentes/nomina/nuevo?docenteId=${docente.id}`}>
+              <Button size="sm">
+                <FileText className="h-4 w-4 mr-1" />
+                Registrar Nómina
+              </Button>
+            </Link>
+          )}
           <Link href={`/docentes/${docente.id}/editar`}>
             <Button size="sm" variant="outline">
               <PenLine className="h-4 w-4 mr-1" />
@@ -107,7 +109,8 @@ export default async function DetalleDocentePage({
         />
       </div>
 
-      {/* Historial de nómina */}
+      {/* Historial de nómina (solo ADMIN) */}
+      {docente.puedeVerNomina && (
       <div className="rounded-lg border border-gray-200 bg-white overflow-hidden">
         <div className="px-5 py-3 border-b border-gray-100 flex items-center justify-between">
           <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wide">
@@ -158,6 +161,7 @@ export default async function DetalleDocentePage({
           </table>
         )}
       </div>
+      )}
     </div>
   );
 }

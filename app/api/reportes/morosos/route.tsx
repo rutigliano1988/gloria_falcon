@@ -1,5 +1,6 @@
 import { renderToBuffer } from "@react-pdf/renderer";
 import { NextRequest } from "next/server";
+import { authorizeApi } from "@/lib/auth";
 import { getMensualidadesData, getConfigColegio } from "@/app/(dashboard)/mensualidades/actions";
 import { getMesAnoActual, getMesesAnoEscolar } from "@/lib/utils";
 import { ReporteMorosos } from "@/components/pdf/ReporteMorosos";
@@ -7,6 +8,9 @@ import { prisma } from "@/lib/prisma";
 import { getLogoBase64 } from "@/lib/logo";
 
 export async function GET(req: NextRequest) {
+  const auth = await authorizeApi();
+  if (auth.response) return auth.response;
+
   const mesAno = req.nextUrl.searchParams.get("mesAno") ?? getMesAnoActual();
 
   // Buscar el año escolar que contiene el mes solicitado

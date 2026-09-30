@@ -18,7 +18,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { signOut } from "@/app/(auth)/login/actions";
-import type { Rol } from "@/lib/auth";
+import type { Rol } from "@/lib/roles";
 
 const NAV_ITEMS = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard, roles: ["ADMIN", "SECRETARIA"] as Rol[] },

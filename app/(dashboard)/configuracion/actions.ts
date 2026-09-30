@@ -1,10 +1,10 @@
 "use server";
 
+import { requireAdmin } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import type { Prisma } from "@prisma/client";
-import { requireAdmin } from "@/lib/auth";
 import { registrarAudit } from "@/lib/audit";
 
 // ─── Año Escolar ─────────────────────────────────────────────────────────────
@@ -66,12 +66,14 @@ const gradoSchema = z.object({
 });
 
 export async function crearGrado(data: z.infer<typeof gradoSchema>) {
+  await requireAdmin();
   const parsed = gradoSchema.parse(data);
   await prisma.grado.create({ data: parsed });
   revalidatePath("/configuracion");
 }
 
 export async function toggleGrado(id: string, activo: boolean) {
+  await requireAdmin();
   await prisma.grado.update({ where: { id }, data: { activo } });
   revalidatePath("/configuracion");
 }
@@ -82,6 +84,7 @@ const seccionSchema = z.object({
 });
 
 export async function crearSeccion(data: z.infer<typeof seccionSchema>) {
+  await requireAdmin();
   const parsed = seccionSchema.parse(data);
   await prisma.seccion.create({ data: parsed });
   revalidatePath("/configuracion");
@@ -119,16 +122,19 @@ const productoSchema = z.object({
 });
 
 export async function crearProducto(data: z.infer<typeof productoSchema>) {
+  await requireAdmin();
   await prisma.producto.create({ data: productoSchema.parse(data) });
   revalidatePath("/configuracion");
 }
 
 export async function actualizarProducto(id: string, data: z.infer<typeof productoSchema>) {
+  await requireAdmin();
   await prisma.producto.update({ where: { id }, data: productoSchema.parse(data) });
   revalidatePath("/configuracion");
 }
 
 export async function toggleProducto(id: string, activo: boolean) {
+  await requireAdmin();
   await prisma.producto.update({ where: { id }, data: { activo } });
   revalidatePath("/configuracion");
 }
@@ -136,11 +142,13 @@ export async function toggleProducto(id: string, activo: boolean) {
 // ─── Categorías de Egreso ─────────────────────────────────────────────────────
 
 export async function crearCategoriaEgreso(nombre: string) {
+  await requireAdmin();
   await prisma.categoriaEgreso.create({ data: { nombre } });
   revalidatePath("/configuracion");
 }
 
 export async function toggleCategoriaEgreso(id: string, activo: boolean) {
+  await requireAdmin();
   await prisma.categoriaEgreso.update({ where: { id }, data: { activo } });
   revalidatePath("/configuracion");
 }
@@ -154,6 +162,7 @@ export async function guardarConfigColegio(data: {
   telefonos: string;
   correo: string;
 }) {
+  await requireAdmin();
   await prisma.configuracion.upsert({
     where: { clave: "datos_colegio" },
     update: { valor: data },
@@ -165,6 +174,7 @@ export async function guardarConfigColegio(data: {
 // ─── Datos de fetch ───────────────────────────────────────────────────────────
 
 export async function getConfiguracionData() {
+  await requireAdmin();
   const [
     anosEscolares,
     grados,

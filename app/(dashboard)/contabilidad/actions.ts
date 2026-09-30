@@ -1,5 +1,6 @@
 "use server";
 
+import { requireUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
@@ -30,6 +31,7 @@ export type EgresoConDetalle = {
 // ─── Fetch principal ──────────────────────────────────────────────────────────
 
 export async function getContabilidadData(mes?: number, ano?: number) {
+  const usuario = await requireUser();
   const hoy = new Date();
   const mesEfectivo = mes && mes >= 1 && mes <= 12 ? mes : hoy.getMonth() + 1;
   const anoEfectivo = ano && ano > 2000 ? ano : hoy.getFullYear();
@@ -115,6 +117,11 @@ export async function getContabilidadData(mes?: number, ano?: number) {
 
   const balance = totalIngresosUsd - totalEgresosUsd;
 
+  // La nómina individual (docente + monto) solo la ve el ADMIN. Para el resto,
+  // los egresos de nómina se muestran como una sola línea agregada del mes.
+  const egresosVisibles =
+    usuario.rol === "ADMIN" ? egresosDetalle : agregarNomina(egresosDetalle, fin);
+
   return {
     mes: mesEfectivo,
     ano: anoEfectivo,
@@ -124,13 +131,35 @@ export async function getContabilidadData(mes?: number, ano?: number) {
     egresosPorCategoria,
     balance,
     tasa,
-    egresos: egresosDetalle,
+    egresos: egresosVisibles,
   };
+}
+
+function agregarNomina(egresos: EgresoConDetalle[], fechaCorte: Date): EgresoConDetalle[] {
+  const nomina = egresos.filter((e) => e.pagoDocenteId != null);
+  if (nomina.length === 0) return egresos;
+  const sumar = (vals: (number | null)[]) =>
+    vals.every((v) => v == null) ? null : vals.reduce<number>((s, v) => s + (v ?? 0), 0);
+  const resumen: EgresoConDetalle = {
+    id: "nomina-agregada",
+    fecha: fechaCorte,
+    categoria: nomina[0].categoria,
+    descripcion: `Nómina del mes (total de ${nomina.length} pago${nomina.length === 1 ? "" : "s"})`,
+    montoUsd: sumar(nomina.map((e) => e.montoUsd)),
+    montoBs: sumar(nomina.map((e) => e.montoBs)),
+    formaPago: null,
+    proveedor: null,
+    numeroFactura: null,
+    pagoDocenteId: null,
+    docenteNombre: null,
+  };
+  return [...egresos.filter((e) => e.pagoDocenteId == null), resumen];
 }
 
 // ─── Datos para el formulario de egreso ───────────────────────────────────────
 
 export async function getEgresoFormData() {
+  await requireUser();
   const [categorias, tasaActual] = await Promise.all([
     prisma.categoriaEgreso.findMany({
       where: { activo: true },
@@ -164,6 +193,7 @@ const registrarEgresoSchema = z
 export type RegistrarEgresoInput = z.infer<typeof registrarEgresoSchema>;
 
 export async function registrarEgreso(data: RegistrarEgresoInput) {
+  await requireUser();
   const parsed = registrarEgresoSchema.parse(data);
 
   await prisma.egreso.create({

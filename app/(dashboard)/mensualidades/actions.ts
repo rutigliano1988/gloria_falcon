@@ -1,5 +1,6 @@
 "use server";
 
+import { requireUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
@@ -39,6 +40,7 @@ export type PagoConDetalles = {
 // ─── Fetch principal (vista /mensualidades) ───────────────────────────────────
 
 export async function getMensualidadesData(mesAno?: string, anoEscolarId?: string) {
+  await requireUser();
   const mesAnoConsulta = mesAno || getMesAnoActual();
 
   const [anoActivo, tasaActual, productos, alumnos] = await Promise.all([
@@ -211,6 +213,7 @@ export async function getMensualidadesData(mesAno?: string, anoEscolarId?: strin
 // ─── Fetch para formulario nuevo pago ─────────────────────────────────────────
 
 export async function getPagoFormData() {
+  await requireUser();
   const [anoActivo, tasaActual, productos] = await Promise.all([
     prisma.anoEscolar.findFirst({ where: { activo: true } }),
     prisma.tasaCambio.findFirst({ orderBy: { fechaRegistro: "desc" } }),
@@ -265,6 +268,7 @@ const registrarPagoSchema = z.object({
 export type RegistrarPagoInput = z.infer<typeof registrarPagoSchema>;
 
 export async function registrarPago(data: RegistrarPagoInput) {
+  await requireUser();
   const parsed = registrarPagoSchema.parse(data);
 
   let result!: { pagoId: string; numeroRecibo: string };
@@ -340,6 +344,7 @@ export async function registrarPago(data: RegistrarPagoInput) {
 // ─── Detalle de un pago ───────────────────────────────────────────────────────
 
 export async function getPagoById(id: string) {
+  await requireUser();
   return prisma.pago.findUnique({
     where: { id },
     include: {
@@ -362,6 +367,7 @@ export async function getPagoById(id: string) {
 // ─── Datos del colegio para PDF ───────────────────────────────────────────────
 
 export async function getConfigColegio() {
+  await requireUser();
   const config = await prisma.configuracion.findUnique({
     where: { clave: "datos_colegio" },
   });

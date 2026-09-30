@@ -1,5 +1,6 @@
 "use server";
 
+import { requireAdmin, requireUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
@@ -76,6 +77,7 @@ export type PagoNominaInput = z.infer<typeof pagoNominaSchema>;
 // ─── Listado de docentes ───────────────────────────────────────────────────────
 
 export async function getDocentes(query?: string, estado?: string) {
+  await requireUser();
   return prisma.docente.findMany({
     where: {
       estado: estado ? (estado as "ACTIVO" | "INACTIVO") : undefined,
@@ -95,21 +97,27 @@ export async function getDocentes(query?: string, estado?: string) {
 // ─── Ficha individual ──────────────────────────────────────────────────────────
 
 export async function getDocenteById(id: string) {
-  return prisma.docente.findUnique({
+  const usuario = await requireUser();
+  const esAdmin = usuario.rol === "ADMIN";
+  const docente = await prisma.docente.findUnique({
     where: { id },
     include: {
       pagosDocente: {
+        // La nómina solo la ve el ADMIN: para el resto no se consulta.
+        where: esAdmin ? undefined : { id: { in: [] } },
         orderBy: [{ periodoAno: "desc" }, { periodoMes: "desc" }],
         take: 12,
         include: { tasaCambio: true },
       },
     },
   });
+  return docente ? { ...docente, puedeVerNomina: esAdmin } : null;
 }
 
 // ─── Crear docente ─────────────────────────────────────────────────────────────
 
 export async function crearDocente(data: DocenteFormData) {
+  await requireUser();
   const parsed = docenteSchema.parse(data);
   await prisma.docente.create({
     data: {
@@ -133,6 +141,7 @@ export async function crearDocente(data: DocenteFormData) {
 // ─── Actualizar docente ────────────────────────────────────────────────────────
 
 export async function actualizarDocente(id: string, data: DocenteFormData) {
+  await requireUser();
   const parsed = docenteSchema.parse(data);
   await prisma.docente.update({
     where: { id },
@@ -158,6 +167,7 @@ export async function actualizarDocente(id: string, data: DocenteFormData) {
 // ─── Cambiar estado ────────────────────────────────────────────────────────────
 
 export async function toggleEstadoDocente(id: string, estado: "ACTIVO" | "INACTIVO") {
+  await requireUser();
   const docente = await prisma.docente.findUnique({
     where: { id },
     select: { estado: true, primerNombre: true, primerApellido: true },
@@ -180,6 +190,7 @@ export async function toggleEstadoDocente(id: string, estado: "ACTIVO" | "INACTI
 // ─── Datos para form de nómina ─────────────────────────────────────────────────
 
 export async function getNominaFormData() {
+  await requireAdmin();
   const [docentes, tasaActual] = await Promise.all([
     prisma.docente.findMany({
       where: { estado: "ACTIVO" },
@@ -193,6 +204,7 @@ export async function getNominaFormData() {
 // ─── Registrar pago de nómina ──────────────────────────────────────────────────
 
 export async function registrarPagoNomina(data: PagoNominaInput) {
+  await requireAdmin();
   const parsed = pagoNominaSchema.parse(data);
 
   const docente = await prisma.docente.findUnique({
@@ -255,6 +267,7 @@ export async function registrarPagoNomina(data: PagoNominaInput) {
 // ─── Detalle de un pago de nómina ─────────────────────────────────────────────
 
 export async function getPagoNominaById(id: string) {
+  await requireAdmin();
   return prisma.pagoDocente.findUnique({
     where: { id },
     include: {

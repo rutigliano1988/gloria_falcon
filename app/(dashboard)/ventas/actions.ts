@@ -1,5 +1,6 @@
 "use server";
 
+import { requireUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
@@ -45,6 +46,7 @@ export type RegistrarVentaInput = z.infer<typeof registrarVentaSchema>;
 // ─── Fetch principal ──────────────────────────────────────────────────────────
 
 export async function getVentasData(tipo?: string) {
+  await requireUser();
   const tipoFiltro =
     tipo === "VENTA"
       ? "VENTA"
@@ -105,6 +107,7 @@ export async function getVentasData(tipo?: string) {
 // ─── Datos para el formulario ─────────────────────────────────────────────────
 
 export async function getVentaFormData() {
+  await requireUser();
   const [productos, tasaActual] = await Promise.all([
     prisma.producto.findMany({
       where: { activo: true },
@@ -118,6 +121,7 @@ export async function getVentaFormData() {
 // ─── Registrar venta / ingreso ────────────────────────────────────────────────
 
 export async function registrarVenta(data: RegistrarVentaInput) {
+  await requireUser();
   const parsed = registrarVentaSchema.parse(data);
 
   const ano = new Date(parsed.fechaPago).getFullYear();
@@ -189,6 +193,7 @@ export async function registrarVenta(data: RegistrarVentaInput) {
 // ─── Detalle de una venta ──────────────────────────────────────────────────────
 
 export async function getVentaById(id: string) {
+  await requireUser();
   return prisma.pago.findUnique({
     where: { id },
     include: {

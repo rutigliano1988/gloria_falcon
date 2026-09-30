@@ -1,5 +1,6 @@
 "use server";
 
+import { requireUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
@@ -65,6 +66,7 @@ export type AlumnoFormData = z.infer<typeof alumnoSchema>;
 // ─── Crear alumno + inscripción ───────────────────────────────────────────────
 
 export async function crearAlumno(data: AlumnoFormData) {
+  await requireUser();
   const parsed = alumnoSchema.parse(data);
 
   await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
@@ -173,6 +175,7 @@ const reinscripcionSchema = z.object({
 });
 
 export async function reinscribirAlumno(data: z.infer<typeof reinscripcionSchema>) {
+  await requireUser();
   const parsed = reinscripcionSchema.parse(data);
 
   await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
@@ -208,6 +211,7 @@ export async function reinscribirAlumno(data: z.infer<typeof reinscripcionSchema
 // ─── Actualizar estado alumno ─────────────────────────────────────────────────
 
 export async function cambiarEstadoAlumno(id: string, estado: "ACTIVO" | "RETIRADO" | "EGRESADO") {
+  await requireUser();
   const alumno = await prisma.alumno.findUnique({
     where: { id },
     select: { estado: true, primerNombre: true, primerApellido: true },
@@ -233,6 +237,7 @@ const ESTADOS_VALIDOS = ["ACTIVO", "RETIRADO", "EGRESADO"] as const;
 type EstadoAlumnoEnum = (typeof ESTADOS_VALIDOS)[number];
 
 export async function getAlumnos(query?: string, estado?: string, pagina: number = 1) {
+  await requireUser();
   const estadoFiltro = ESTADOS_VALIDOS.includes(estado as EstadoAlumnoEnum)
     ? (estado as EstadoAlumnoEnum)
     : undefined;
@@ -271,6 +276,7 @@ export async function getAlumnos(query?: string, estado?: string, pagina: number
 }
 
 export async function getAlumnoById(id: string) {
+  await requireUser();
   return prisma.alumno.findUnique({
     where: { id },
     include: {
@@ -287,6 +293,7 @@ export async function getAlumnoById(id: string) {
 }
 
 export async function getGradosYAnosActivos() {
+  await requireUser();
   const [grados, anos] = await Promise.all([
     prisma.grado.findMany({ where: { activo: true }, include: { secciones: { where: { activo: true } } }, orderBy: { orden: "asc" } }),
     prisma.anoEscolar.findMany({ orderBy: { nombre: "desc" } }),

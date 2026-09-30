@@ -2,6 +2,7 @@ import { requireAdmin } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { UsuariosTable } from "./UsuariosTable";
+import { parseRol } from "@/lib/roles";
 
 export const dynamic = "force-dynamic";
 
@@ -25,7 +26,7 @@ export default async function UsuariosPage() {
   const usuarios = (data?.users ?? []).map((u) => ({
     id: u.id,
     email: u.email ?? "",
-    rol: ((u.app_metadata?.rol ?? "ADMIN") as "ADMIN" | "SECRETARIA"),
+    rol: parseRol(u.app_metadata),
     creadoEn: u.created_at,
     ultimoAcceso: u.last_sign_in_at ?? null,
   }));
@@ -42,8 +43,9 @@ export default async function UsuariosPage() {
       <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
         <strong>Roles disponibles:</strong>{" "}
         <span className="font-semibold">Administrador</span> — acceso completo, incluye Configuración y esta sección.{" "}
-        <span className="font-semibold">Secretaria</span> — puede registrar pagos y gestionar alumnos y docentes,
-        pero no puede acceder a Configuración ni Usuarios.
+        <span className="font-semibold">Secretaria</span> — puede registrar pagos, gestionar alumnos y docentes y ver
+        contabilidad, pero no puede acceder a la nómina, Configuración ni Usuarios.{" "}
+        <span className="font-semibold">Sin rol</span> — la cuenta no tiene acceso hasta que se le asigne un rol.
       </div>
 
       <UsuariosTable usuarios={usuarios} selfId={self.id} />

@@ -1,22 +1,20 @@
 "use server";
 
+import { requireAdmin, requireUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 import { registrarAudit } from "@/lib/audit";
 import { redirect } from "next/navigation";
 import type { Prisma } from "@prisma/client";
 
 export async function generarEnlaceSolicitud(): Promise<void> {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) redirect("/login");
-
+  await requireUser();
   await prisma.solicitudInscripcion.create({ data: {} });
   revalidatePath("/alumnos/solicitudes");
 }
 
 export async function getSolicitudes() {
+  await requireUser();
   return prisma.solicitudInscripcion.findMany({
     orderBy: { creadoEn: "desc" },
     select: {
@@ -27,6 +25,7 @@ export async function getSolicitudes() {
 }
 
 export async function getSolicitudDetalle(id: string) {
+  await requireUser();
   return prisma.solicitudInscripcion.findUnique({
     where: { id },
     include: { anoEscolar: true, grado: true, seccion: true },
@@ -34,6 +33,7 @@ export async function getSolicitudDetalle(id: string) {
 }
 
 export async function getGradosYAnos() {
+  await requireUser();
   const [grados, anos, secciones] = await Promise.all([
     prisma.grado.findMany({ where: { activo: true }, orderBy: { orden: "asc" } }),
     prisma.anoEscolar.findMany({ orderBy: { nombre: "desc" } }),
@@ -46,6 +46,7 @@ export async function aprobarSolicitud(
   id: string,
   data: { anoEscolarId: string; gradoId: string; seccionId?: string; observaciones?: string }
 ) {
+  await requireAdmin();
   const solicitud = await prisma.solicitudInscripcion.findUnique({ where: { id } });
   if (!solicitud) throw new Error("Solicitud no encontrada");
   if (!solicitud.primerApellido || !solicitud.primerNombre || !solicitud.sexo || !solicitud.fechaNacimiento) {
@@ -168,6 +169,7 @@ export async function aprobarSolicitud(
 }
 
 export async function rechazarSolicitud(id: string, observaciones?: string) {
+  await requireAdmin();
   await prisma.solicitudInscripcion.update({
     where: { id },
     data: { estado: "RECHAZADA", observaciones: observaciones || null },

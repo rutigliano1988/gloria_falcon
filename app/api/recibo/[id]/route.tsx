@@ -1,5 +1,6 @@
 import { renderToBuffer } from "@react-pdf/renderer";
 import { NextRequest } from "next/server";
+import { authorizeApi } from "@/lib/auth";
 import { getPagoById, getConfigColegio } from "@/app/(dashboard)/mensualidades/actions";
 import { ReciboPago } from "@/components/pdf/ReciboPago";
 import { getLogoBase64 } from "@/lib/logo";
@@ -8,6 +9,9 @@ export async function GET(
   _req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const auth = await authorizeApi();
+  if (auth.response) return auth.response;
+
   const { id } = await params;
 
   const [pago, config] = await Promise.all([getPagoById(id), getConfigColegio()]);

@@ -1,5 +1,6 @@
 import { renderToBuffer } from "@react-pdf/renderer";
 import { NextRequest } from "next/server";
+import { authorizeApi } from "@/lib/auth";
 import { getPagoNominaById } from "@/app/(dashboard)/docentes/actions";
 import { getConfigColegio } from "@/app/(dashboard)/mensualidades/actions";
 import { ComprobanteNomina } from "@/components/pdf/ComprobanteNomina";
@@ -9,6 +10,9 @@ export async function GET(
   _req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const auth = await authorizeApi("ADMIN");
+  if (auth.response) return auth.response;
+
   const { id } = await params;
 
   const [pago, config] = await Promise.all([

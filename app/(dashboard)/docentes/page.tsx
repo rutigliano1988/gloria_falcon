@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { getDocentes } from "./actions";
 import { DocentesTable } from "./DocentesTable";
+import { requireUser } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
@@ -13,7 +14,7 @@ export default async function DocentesPage({
   searchParams: Promise<{ q?: string; estado?: string }>;
 }) {
   const { q, estado } = await searchParams;
-  const docentes = await getDocentes(q, estado);
+  const [docentes, usuario] = await Promise.all([getDocentes(q, estado), requireUser()]);
 
   const totalActivos = docentes.filter((d) => d.estado === "ACTIVO").length;
   const totalInactivos = docentes.filter((d) => d.estado === "INACTIVO").length;
@@ -77,7 +78,7 @@ export default async function DocentesPage({
       </form>
 
       {/* Tabla */}
-      <DocentesTable docentes={docentes} />
+      <DocentesTable docentes={docentes} puedeVerNomina={usuario.rol === "ADMIN"} />
     </div>
   );
 }

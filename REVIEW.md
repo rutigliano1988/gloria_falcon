@@ -433,13 +433,13 @@ Implementado en la rama `claude/busy-gates-kb3ip8` (un commit por bloque; tests,
 | M1, M2 | ✅ | Máquina de estados, token de 256 bits con caducidad de 14 días y anulación de enlaces. |
 | M14 | ✅ | Selector de mes y año (verificado en el navegador). |
 | M16 | ✅ | Nómina solo para ADMIN; agregada en contabilidad para la secretaria. |
-| A5 | 🟡 parcial | Hecho: limpieza de los datos de la solicitud al decidirla y límites de datos del formulario público. **Pendiente de decisiones:** aviso de privacidad y consentimiento, rectificación y baja/anonimización, retención. |
+| A5 | 🟡 parcial | Hecho: limpieza de los datos de la solicitud al decidirla, límites de datos del formulario público, **pantalla de rectificación** (`/alumnos/[id]/editar`, con auditoría de campos sin valores) y **borrador del aviso de privacidad y consentimiento** (`docs/legal/`, pendiente de revisión legal). **Pendiente:** aprobar los textos y registrar el consentimiento en la app, definir los plazos de retención, y la baja/anonimización. |
 | B8, M11 (parcial) | ✅ | Login con mensajes fijos; las acciones de dinero devuelven `{ ok, error }`. |
 
 **Para llevarlo a producción:**
-1. Asignar rol a la cuenta sin rol.
-2. Ejecutar `prisma migrate deploy` contra producción (4 migraciones nuevas, todas idempotentes).
-3. Fusionar la rama y desplegar.
+1. ✅ (30/09) Rol ADMIN asignado a la cuenta que no lo tenía.
+2. ✅ (30/09) Las 4 migraciones nuevas aplicadas en producción y registradas en `_prisma_migrations` con los mismos checksums de Prisma. Son compatibles con el código que corre hoy (solo agregan columnas opcionales).
+3. Pendiente: fusionar la rama y desplegar.
 
 ## Plan de arreglos sugerido
 

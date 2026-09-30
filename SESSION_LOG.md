@@ -180,3 +180,26 @@ Decisiones y hallazgos durante la implementación:
 - Cambio de regla de negocio a confirmar: la secretaria ya no puede editar los montos de mensualidad ni de servicios al cobrar; solo puede agregar conceptos adicionales positivos.
 - Pendiente de A5 (necesita decisiones del usuario): textos legales de aviso y consentimiento, pantallas de rectificación y baja, y plazos de retención.
 - No hice ninguna escritura en producción (ni en Supabase ni en Vercel).
+
+## 13. Puesta en producción (parcial) y A5
+
+A pedido del usuario:
+- **Rol:** la cuenta sin rol era la del propio usuario. Le asigné `app_metadata.rol = ADMIN` en Supabase (UPDATE sobre `auth.users` de ese id y correo).
+- **Migraciones en producción:** en el entorno no hay URL de producción (`.env`), así que no se podía usar `prisma migrate deploy`.
+  - Apliqué las 4 migraciones por el conector de Supabase, en una sola transacción, y las registré en `_prisma_migrations` con el SHA-256 de cada `migration.sql`.
+  - Las 2 migraciones antiguas ya tenían en producción exactamente ese checksum, lo que confirma el método.
+  - Verificación posterior:
+    - 6 migraciones registradas;
+    - 11 columnas nuevas presentes;
+    - 0 tablas sin RLS y 0 permisos para anon/authenticated;
+    - backfill correcto del único egreso (45001 Bs / 674,93 = 66,68 USD) y de la única nómina.
+- **Rectificación (A5):**
+  - Nueva acción `actualizarAlumno`: validación zod con límites de longitud, y solo se aceptan representantes del propio alumno.
+  - Todo va en una transacción; la auditoría guarda los nombres de los campos, no los valores.
+  - Nueva página `/alumnos/[id]/editar` y botón "Editar datos" en la ficha. Campos de representante compartidos con la ficha de inscripción (`ficha-campos.tsx`).
+  - 3 tests de integración nuevos. El de representante ajeno se comprobó por mutación: falla si se quita la validación.
+- **Borrador legal:** `docs/legal/privacidad-y-consentimiento-BORRADOR.md`, con el aviso, las casillas de consentimiento, los puntos del contrato de encargo y las notas para el abogado.
+- **Retención:** el usuario indica que los plazos aún no están definidos; quedan como propuesta en el borrador.
+- **Verificación:** 93 tests unitarios y 17 de integración en verde; `tsc` y build OK; lint sin errores.
+- **Sin verificación visual:** la pantalla de edición no se probó en el navegador, porque requiere sesión de Supabase.
+

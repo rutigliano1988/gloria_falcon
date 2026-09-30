@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { DatePicker } from "@/components/ui/date-picker";
@@ -9,22 +9,20 @@ import { useToast } from "@/hooks/use-toast";
 import {
   formatUSD,
   formatBS,
-  calcularBs,
   formatMesAno,
   getMesesAnoEscolar,
   mesAnoToNum,
   FORMA_PAGO_LABELS,
   TIPO_SERVICIO_LABELS,
-  parsePrismaError,
 } from "@/lib/utils";
+import { calcularConceptosMensualidad, montoBsDesdeUsd, totalConceptos } from "@/lib/finanzas";
 import { registrarPago } from "../actions";
 import type { getPagoFormData } from "../actions";
 
 type FormData = Awaited<ReturnType<typeof getPagoFormData>>;
 
-interface ConceptoEditable {
+interface ConceptoAdicional {
   concepto: string;
-  mesAno: string | null;
   montoUsd: number;
 }
 
@@ -34,6 +32,11 @@ interface Props {
   tasaActual: FormData["tasaActual"];
   productos: FormData["productos"];
   alumnoIdInicial?: string;
+}
+
+function hoyLocal(): string {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
 export function RegistrarPagoForm({
@@ -48,109 +51,55 @@ export function RegistrarPagoForm({
 
   const [alumnoId, setAlumnoId] = useState(alumnoIdInicial ?? "");
   const [mesesSeleccionados, setMesesSeleccionados] = useState<string[]>([]);
-  const [conceptos, setConceptos] = useState<ConceptoEditable[]>([]);
+  const [adicionales, setAdicionales] = useState<ConceptoAdicional[]>([]);
   const [formaPago, setFormaPago] = useState<string>("EFECTIVO_USD");
-  const [monedaPagada, setMonedaPagada] = useState<string>("USD");
-  const [tasaOverride, setTasaOverride] = useState(
-    tasaActual ? Number(tasaActual.tasa).toFixed(4) : ""
-  );
+  const [monedaPagada, setMonedaPagada] = useState<"USD" | "BS">("USD");
+  // Tasa realmente aplicada al cobro: se guarda con el pago (antes se perdía).
+  const [tasa, setTasa] = useState(tasaActual ? Number(tasaActual.tasa).toFixed(4) : "");
   const [numeroReferencia, setNumeroReferencia] = useState("");
-  const [fechaPago, setFechaPago] = useState(
-    new Date().toISOString().split("T")[0]
-  );
+  const [fechaPago, setFechaPago] = useState(hoyLocal);
   const [observaciones, setObservaciones] = useState("");
   const [loading, setLoading] = useState(false);
 
   const mesesDelAno = getMesesAnoEscolar(anoActivo.nombre);
-  const mesActual = (() => {
-    const hoy = new Date();
-    return `${String(hoy.getMonth() + 1).padStart(2, "0")}/${hoy.getFullYear()}`;
-  })();
-  const mesActualNum = mesAnoToNum(mesActual);
-
-  const precioMap: Record<string, number> = {};
-  for (const p of productos) {
-    precioMap[p.nombre] = Number(p.precioUsd);
-  }
+  const mesActualNum = mesAnoToNum(hoyLocal().slice(5, 7) + "/" + hoyLocal().slice(0, 4));
 
   const alumnoSeleccionado = alumnos.find((a) => a.id === alumnoId);
   const inscripcion = alumnoSeleccionado?.inscripciones?.[0];
+  const mesesCobrados = alumnoSeleccionado?.mesesCobrados ?? [];
 
-  const recalcularConceptos = useCallback(() => {
-    if (!alumnoSeleccionado || !inscripcion || mesesSeleccionados.length === 0) {
-      setConceptos([]);
-      return;
-    }
-
-    const serviciosActivos = inscripcion.servicios;
-    const descuento = Number(inscripcion.descuentoMontoUsd ?? 0);
-    const nuevosConceptos: ConceptoEditable[] = [];
-
-    for (const mes of mesesSeleccionados) {
-      nuevosConceptos.push({
-        concepto: "Mensualidad",
-        mesAno: mes,
-        montoUsd: precioMap["Mensualidad"] ?? 0,
+  // Vista previa con la MISMA función que usa el servidor; el servidor recalcula al guardar.
+  let vistaPrevia: ReturnType<typeof calcularConceptosMensualidad> = [];
+  let errorCalculo: string | null = null;
+  if (inscripcion && mesesSeleccionados.length > 0) {
+    try {
+      const precios = Object.fromEntries(productos.map((p) => [p.nombre, Number(p.precioUsd)]));
+      const ordenados = [...mesesSeleccionados].sort((x, y) => mesAnoToNum(x) - mesAnoToNum(y));
+      vistaPrevia = calcularConceptosMensualidad({
+        meses: ordenados,
+        serviciosActivos: inscripcion.servicios.map((s) => s.tipo),
+        precios,
+        descuentoMensualUsd: Number(inscripcion.descuentoMontoUsd ?? 0),
       });
-      for (const servicio of serviciosActivos) {
-        const label = TIPO_SERVICIO_LABELS[servicio.tipo];
-        nuevosConceptos.push({
-          concepto: label,
-          mesAno: mes,
-          montoUsd: precioMap[label] ?? 0,
-        });
-      }
+    } catch (e) {
+      errorCalculo = e instanceof Error ? e.message : "Error al calcular";
     }
+  }
 
-    if (descuento > 0) {
-      nuevosConceptos.push({
-        concepto: "Descuento/Beca",
-        mesAno: null,
-        montoUsd: -(descuento * mesesSeleccionados.length),
-      });
-    }
+  const adicionalesValidos = adicionales.filter((c) => c.concepto.trim() && c.montoUsd > 0);
+  const totalUsd = totalConceptos([...vistaPrevia, ...adicionalesValidos]);
+  const tasaEfectiva = parseFloat(tasa) || 0;
+  const totalBs = monedaPagada === "BS" && tasaEfectiva > 0 ? montoBsDesdeUsd(totalUsd, tasaEfectiva) : null;
 
-    setConceptos(nuevosConceptos);
-  }, [alumnoId, mesesSeleccionados.join(","), productos.length]);
-
-  useEffect(() => {
-    recalcularConceptos();
-  }, [recalcularConceptos]);
-
-  // Cuando cambia la moneda, ajustar forma de pago por defecto
-  useEffect(() => {
-    if (monedaPagada === "USD") setFormaPago("EFECTIVO_USD");
-    else setFormaPago("EFECTIVO_BS");
-  }, [monedaPagada]);
-
-  const totalUsd = conceptos.reduce((sum, c) => sum + c.montoUsd, 0);
-  const tasaEfectiva = parseFloat(tasaOverride) || 0;
-  const totalBs = monedaPagada === "BS" && tasaEfectiva > 0
-    ? calcularBs(totalUsd, tasaEfectiva)
-    : null;
+  const cambiarMoneda = (m: "USD" | "BS") => {
+    setMonedaPagada(m);
+    setFormaPago(m === "USD" ? "EFECTIVO_USD" : "EFECTIVO_BS");
+  };
 
   const toggleMes = (mes: string) => {
     setMesesSeleccionados((prev) =>
       prev.includes(mes) ? prev.filter((m) => m !== mes) : [...prev, mes]
     );
-  };
-
-  const actualizarMontoConcepto = (idx: number, valor: string) => {
-    const num = parseFloat(valor);
-    setConceptos((prev) =>
-      prev.map((c, i) => (i === idx ? { ...c, montoUsd: isNaN(num) ? 0 : num } : c))
-    );
-  };
-
-  const eliminarConcepto = (idx: number) => {
-    setConceptos((prev) => prev.filter((_, i) => i !== idx));
-  };
-
-  const agregarConceptoManual = () => {
-    setConceptos((prev) => [
-      ...prev,
-      { concepto: "Concepto adicional", mesAno: null, montoUsd: 0 },
-    ]);
   };
 
   const handleSubmit = async () => {
@@ -160,10 +109,6 @@ export function RegistrarPagoForm({
     }
     if (mesesSeleccionados.length === 0) {
       toast({ title: "Selecciona al menos un mes", variant: "destructive" });
-      return;
-    }
-    if (conceptos.length === 0) {
-      toast({ title: "Agrega al menos un concepto", variant: "destructive" });
       return;
     }
     if (monedaPagada === "BS" && tasaEfectiva <= 0) {
@@ -181,31 +126,23 @@ export function RegistrarPagoForm({
       const result = await registrarPago({
         alumnoId,
         anoEscolarId: anoActivo.id,
-        montoUsd: totalUsd,
-        montoBs: totalBs,
-        tasaCambioId: tasaActual?.id ?? null,
-        monedaPagada: monedaPagada as "USD" | "BS",
+        meses: mesesSeleccionados,
+        conceptosAdicionales: adicionalesValidos,
+        monedaPagada,
         formaPago: formaPago as "EFECTIVO_USD" | "EFECTIVO_BS" | "PAGO_MOVIL_BS" | "TRANSFERENCIA_BS",
+        tasaAplicada: monedaPagada === "BS" ? tasaEfectiva : null,
         numeroReferencia: numeroReferencia.trim() || null,
         fechaPago,
         observaciones: observaciones.trim() || null,
-        conceptos: conceptos.map((c) => ({
-          concepto: c.concepto,
-          mesAno: c.mesAno,
-          montoUsd: c.montoUsd,
-        })),
       });
-
-      toast({
-        title: `Pago registrado — Recibo ${result.numeroRecibo}`,
-      });
+      if (!result.ok) {
+        toast({ title: "No se pudo registrar el pago", description: result.error, variant: "destructive" });
+        return;
+      }
+      toast({ title: `Pago registrado — Recibo ${result.numeroRecibo}` });
       router.push(`/mensualidades/${result.pagoId}`);
-    } catch (e) {
-      toast({
-        title: "Error al registrar el pago",
-        description: parsePrismaError(e),
-        variant: "destructive",
-      });
+    } catch {
+      toast({ title: "Error al registrar el pago", description: "Intenta de nuevo.", variant: "destructive" });
     } finally {
       setLoading(false);
     }
@@ -217,9 +154,7 @@ export function RegistrarPagoForm({
     <div className="space-y-5">
       {/* Selección de alumno */}
       <div className="rounded-lg border border-gray-200 bg-white p-5">
-        <h3 className="font-semibold text-sm text-gray-700 mb-3">
-          1. Selección de Alumno
-        </h3>
+        <h3 className="font-semibold text-sm text-gray-700 mb-3">1. Selección de Alumno</h3>
         <select
           value={alumnoId}
           onChange={(e) => {
@@ -245,7 +180,7 @@ export function RegistrarPagoForm({
             <span>Servicios: {["Mensualidad", ...inscripcion.servicios.map((s) => TIPO_SERVICIO_LABELS[s.tipo])].join(", ")}</span>
             {Number(inscripcion.descuentoMontoUsd ?? 0) > 0 && (
               <Badge variant="secondary">
-                Descuento: {formatUSD(Number(inscripcion.descuentoMontoUsd))}
+                Descuento: {formatUSD(Number(inscripcion.descuentoMontoUsd))}/mes
               </Badge>
             )}
           </div>
@@ -255,86 +190,99 @@ export function RegistrarPagoForm({
       {/* Selección de meses */}
       {alumnoId && (
         <div className="rounded-lg border border-gray-200 bg-white p-5">
-          <h3 className="font-semibold text-sm text-gray-700 mb-3">
-            2. Meses a Pagar
-          </h3>
+          <h3 className="font-semibold text-sm text-gray-700 mb-3">2. Meses a Pagar</h3>
           <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-2">
             {mesesDelAno.map((mes) => {
               const esFuturo = mesAnoToNum(mes) > mesActualNum;
+              const cobrado = mesesCobrados.includes(mes);
+              const deshabilitado = esFuturo || cobrado;
               const seleccionado = mesesSeleccionados.includes(mes);
               let label = mes;
               try { label = formatMesAno(mes); } catch { /* */ }
               return (
                 <button
                   key={mes}
-                  onClick={() => !esFuturo && toggleMes(mes)}
-                  disabled={esFuturo}
+                  type="button"
+                  onClick={() => !deshabilitado && toggleMes(mes)}
+                  disabled={deshabilitado}
+                  title={cobrado ? "Mes ya cobrado" : esFuturo ? "Mes futuro" : undefined}
                   className={[
                     "px-3 py-2 rounded-md text-xs border transition-colors",
                     seleccionado
                       ? "bg-blue-600 text-white border-blue-600"
+                      : cobrado
+                      ? "bg-green-50 text-green-700 border-green-200 cursor-not-allowed"
                       : esFuturo
                       ? "bg-gray-50 text-gray-300 border-gray-100 cursor-not-allowed"
                       : "bg-white text-gray-700 border-gray-200 hover:border-blue-400",
                   ].join(" ")}
                 >
                   {label}
+                  {cobrado && <span className="block text-[10px]">Pagado</span>}
                 </button>
               );
             })}
           </div>
           {mesesSeleccionados.length > 0 && (
-            <p className="mt-2 text-xs text-blue-600">
-              {mesesSeleccionados.length} mes(es) seleccionado(s)
-            </p>
+            <p className="mt-2 text-xs text-blue-600">{mesesSeleccionados.length} mes(es) seleccionado(s)</p>
           )}
         </div>
       )}
 
-      {/* Conceptos */}
-      {conceptos.length > 0 && (
+      {/* Conceptos: calculados (solo lectura) + adicionales */}
+      {mesesSeleccionados.length > 0 && (
         <div className="rounded-lg border border-gray-200 bg-white p-5">
-          <h3 className="font-semibold text-sm text-gray-700 mb-3">
-            3. Conceptos del Pago
-          </h3>
-          <div className="space-y-1">
-            <div className="grid grid-cols-[1fr_100px_80px_32px] gap-2 text-xs font-medium text-gray-500 uppercase px-1 mb-2">
-              <span>Concepto</span>
-              <span>Mes/Año</span>
-              <span className="text-right">Monto USD</span>
-              <span></span>
-            </div>
-            {conceptos.map((c, i) => (
-              <div
-                key={i}
-                className="grid grid-cols-[1fr_100px_80px_32px] gap-2 items-center"
-              >
+          <h3 className="font-semibold text-sm text-gray-700 mb-3">3. Conceptos del Pago</h3>
+          {errorCalculo ? (
+            <p className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+              {errorCalculo} Revisa los productos en Configuración.
+            </p>
+          ) : (
+            <table className="w-full text-sm">
+              <tbody className="divide-y divide-gray-100">
+                {vistaPrevia.map((c, i) => (
+                  <tr key={i}>
+                    <td className="py-1.5">{c.concepto}</td>
+                    <td className="py-1.5 text-xs text-gray-500">{c.mesAno ? formatMesAno(c.mesAno) : "—"}</td>
+                    <td className={`py-1.5 text-right font-mono ${c.montoUsd < 0 ? "text-green-700" : ""}`}>
+                      {formatUSD(c.montoUsd)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+          <p className="mt-2 text-xs text-gray-400">
+            Los montos salen de los precios configurados y del descuento de la inscripción; no se pueden editar aquí.
+          </p>
+
+          <div className="mt-4 space-y-2">
+            {adicionales.map((c, i) => (
+              <div key={i} className="grid grid-cols-[1fr_100px_32px] gap-2 items-center">
                 <input
                   value={c.concepto}
+                  placeholder="Concepto adicional (p. ej. materiales)"
                   onChange={(e) =>
-                    setConceptos((prev) =>
-                      prev.map((x, j) =>
-                        j === i ? { ...x, concepto: e.target.value } : x
-                      )
-                    )
+                    setAdicionales((prev) => prev.map((x, j) => (j === i ? { ...x, concepto: e.target.value } : x)))
                   }
                   className="border border-gray-200 rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
                 />
-                <span className="text-xs text-gray-500 text-center">
-                  {c.mesAno ?? "—"}
-                </span>
                 <input
                   type="number"
                   step="0.01"
-                  value={c.montoUsd}
-                  onChange={(e) => actualizarMontoConcepto(i, e.target.value)}
-                  className={[
-                    "border rounded px-2 py-1.5 text-sm text-right focus:outline-none focus:ring-1 focus:ring-blue-500",
-                    c.montoUsd < 0 ? "border-red-200 text-red-600" : "border-gray-200",
-                  ].join(" ")}
+                  min="0"
+                  value={c.montoUsd || ""}
+                  placeholder="USD"
+                  onChange={(e) =>
+                    setAdicionales((prev) =>
+                      prev.map((x, j) => (j === i ? { ...x, montoUsd: parseFloat(e.target.value) || 0 } : x))
+                    )
+                  }
+                  className="border border-gray-200 rounded px-2 py-1.5 text-sm text-right focus:outline-none focus:ring-1 focus:ring-blue-500"
                 />
                 <button
-                  onClick={() => eliminarConcepto(i)}
+                  type="button"
+                  onClick={() => setAdicionales((prev) => prev.filter((_, j) => j !== i))}
                   className="text-gray-300 hover:text-red-400 text-lg leading-none"
                 >
                   ×
@@ -344,10 +292,11 @@ export function RegistrarPagoForm({
           </div>
           <div className="flex items-center justify-between mt-4 pt-4 border-t border-gray-100">
             <button
-              onClick={agregarConceptoManual}
+              type="button"
+              onClick={() => setAdicionales((prev) => [...prev, { concepto: "", montoUsd: 0 }])}
               className="text-xs text-blue-600 hover:underline"
             >
-              + Agregar concepto manual
+              + Agregar concepto adicional
             </button>
             <div className="text-right">
               <span className="text-xs text-gray-500 mr-2">Total:</span>
@@ -358,7 +307,7 @@ export function RegistrarPagoForm({
       )}
 
       {/* Forma de pago */}
-      {mesesSeleccionados.length > 0 && (
+      {mesesSeleccionados.length > 0 && !errorCalculo && (
         <div className="rounded-lg border border-gray-200 bg-white p-5">
           <h3 className="font-semibold text-sm text-gray-700 mb-4">
             4. Forma de Pago
@@ -377,7 +326,7 @@ export function RegistrarPagoForm({
                       name="moneda"
                       value={m}
                       checked={monedaPagada === m}
-                      onChange={() => setMonedaPagada(m)}
+                      onChange={() => cambiarMoneda(m as "USD" | "BS")}
                       className="accent-blue-600"
                     />
                     <span className="text-sm">{m === "USD" ? "Dólares ($)" : "Bolívares (Bs)"}</span>
@@ -419,8 +368,8 @@ export function RegistrarPagoForm({
                 <input
                   type="number"
                   step="0.0001"
-                  value={tasaOverride}
-                  onChange={(e) => setTasaOverride(e.target.value)}
+                  value={tasa}
+                  onChange={(e) => setTasa(e.target.value)}
                   className="w-full border border-gray-200 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                   placeholder="Ej: 42.5000"
                 />
@@ -472,24 +421,16 @@ export function RegistrarPagoForm({
       )}
 
       {/* Resumen y enviar */}
-      {conceptos.length > 0 && (
+      {mesesSeleccionados.length > 0 && !errorCalculo && (
         <div className="rounded-lg border border-blue-100 bg-blue-50 p-4 flex items-center justify-between">
           <div>
             <p className="text-sm text-blue-700">
-              Total a registrar:{" "}
-              <span className="font-bold text-lg">{formatUSD(totalUsd)}</span>
-              {totalBs && (
-                <span className="ml-2 text-blue-600">
-                  = {formatBS(totalBs)}
-                </span>
-              )}
+              Total a registrar: <span className="font-bold text-lg">{formatUSD(totalUsd)}</span>
+              {totalBs && <span className="ml-2 text-blue-600">= {formatBS(totalBs)}</span>}
             </p>
             <p className="text-xs text-blue-500 mt-0.5">
-              {mesesSeleccionados.length} mes(es) •{" "}
-              {FORMA_PAGO_LABELS[formaPago] ?? formaPago} •{" "}
-              {alumnoSeleccionado
-                ? `${alumnoSeleccionado.primerApellido} ${alumnoSeleccionado.primerNombre}`
-                : ""}
+              {mesesSeleccionados.length} mes(es) • {FORMA_PAGO_LABELS[formaPago] ?? formaPago} •{" "}
+              {alumnoSeleccionado ? `${alumnoSeleccionado.primerApellido} ${alumnoSeleccionado.primerNombre}` : ""}
             </p>
           </div>
           <Button onClick={handleSubmit} disabled={loading}>

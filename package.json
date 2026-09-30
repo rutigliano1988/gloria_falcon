@@ -9,7 +9,7 @@
     "lint": "eslint",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:integracion": "vitest run __tests__/integracion"
+    "test:integracion": "vitest run __tests__/integracion --no-file-parallelism"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.2",

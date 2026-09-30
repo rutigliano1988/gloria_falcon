@@ -6,7 +6,8 @@ import { Download } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { formatUSD, formatBS, formatFecha, FORMA_PAGO_LABELS } from "@/lib/utils";
-import type { EgresoConDetalle } from "./actions";
+import { anularEgreso, type EgresoConDetalle } from "./actions";
+import { AnularButton } from "@/components/AnularButton";
 
 function exportarCSV(egresos: EgresoConDetalle[]) {
   const headers = [
@@ -47,9 +48,10 @@ function exportarCSV(egresos: EgresoConDetalle[]) {
 
 interface Props {
   egresos: EgresoConDetalle[];
+  puedeAnular?: boolean;
 }
 
-export function EgresosTable({ egresos }: Props) {
+export function EgresosTable({ egresos, puedeAnular = false }: Props) {
   const [busqueda, setBusqueda] = useState("");
 
   const filtrados = egresos.filter((e) => {
@@ -149,12 +151,20 @@ export function EgresosTable({ egresos }: Props) {
                     )}
                   </td>
                   <td className="px-4 py-2.5">
-                    {e.pagoDocenteId && (
+                    {e.pagoDocenteId ? (
                       <Link href={`/docentes/nomina/${e.pagoDocenteId}`}>
                         <Button size="sm" variant="ghost" className="text-xs">
                           Ver nómina
                         </Button>
                       </Link>
+                    ) : (
+                      puedeAnular &&
+                      e.id !== "nomina-agregada" && (
+                        <AnularButton
+                          accion={(motivo) => anularEgreso(e.id, motivo)}
+                          descripcion="este egreso"
+                        />
+                      )
                     )}
                   </td>
                 </tr>

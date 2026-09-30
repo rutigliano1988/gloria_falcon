@@ -2,9 +2,8 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft, FileText } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Separator } from "@/components/ui/separator";
-import { getPagoNominaById } from "../../actions";
+import { getPagoNominaById, anularPagoNomina } from "../../actions";
+import { AnularButton } from "@/components/AnularButton";
 import { getConfigColegio } from "@/app/(dashboard)/mensualidades/actions";
 import { formatBS, formatFecha, FORMA_PAGO_LABELS, CARGO_DOCENTE_LABELS, MESES } from "@/lib/utils";
 
@@ -33,7 +32,7 @@ export default async function DetalleNominaPage({
 
   const otrosConceptos = (pago.otrosConceptos as { descripcion: string; montoBs: number }[] | null) ?? [];
   const deducciones = (pago.deducciones as { descripcion: string; montoBs: number }[] | null) ?? [];
-  const tasa = pago.tasaCambio ? Number(pago.tasaCambio.tasa) : null;
+  const tasa = pago.tasaAplicada ? Number(pago.tasaAplicada) : pago.tasaCambio ? Number(pago.tasaCambio.tasa) : null;
 
   return (
     <div className="max-w-2xl mx-auto space-y-5">
@@ -55,14 +54,26 @@ export default async function DetalleNominaPage({
             </p>
           </div>
         </div>
+        <div className="flex gap-2">
+        {!pago.deletedAt && (
+          <AnularButton accion={anularPagoNomina.bind(null, pago.id)} descripcion="este pago de nómina" />
+        )}
         <a href={`/api/nomina/${pago.id}`} target="_blank" rel="noreferrer">
           <Button variant="outline" size="sm">
             <FileText className="h-4 w-4 mr-2" />
             Descargar PDF
           </Button>
         </a>
+        </div>
       </div>
 
+
+      {pago.deletedAt && (
+        <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-800">
+          <p className="font-semibold">ANULADO el {formatFecha(pago.deletedAt)}{pago.anuladoPor ? ` por ${pago.anuladoPor}` : ""}</p>
+          {pago.motivoAnulacion && <p className="mt-1">Motivo: {pago.motivoAnulacion}</p>}
+        </div>
+      )}
       {/* Datos colegio */}
       {config && (
         <div className="rounded-lg border border-gray-200 bg-white p-4">
@@ -148,7 +159,7 @@ export default async function DetalleNominaPage({
           )}
           {tasa && (
             <div>
-              <p className="text-xs text-gray-400 uppercase mb-0.5">Tasa BCV</p>
+              <p className="text-xs text-gray-400 uppercase mb-0.5">Tasa aplicada</p>
               <p className="text-sm">{tasa.toFixed(4)} Bs/$1</p>
             </div>
           )}

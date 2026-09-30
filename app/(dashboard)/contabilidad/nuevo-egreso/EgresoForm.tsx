@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { DatePicker } from "@/components/ui/date-picker";
 import { useToast } from "@/hooks/use-toast";
-import { formatBS, calcularBs, FORMA_PAGO_LABELS, parsePrismaError } from "@/lib/utils";
+import { formatBS, calcularBs, FORMA_PAGO_LABELS } from "@/lib/utils";
 import { registrarEgreso } from "../actions";
 import type { getEgresoFormData } from "../actions";
 
@@ -58,24 +58,35 @@ export function EgresoForm({ categorias, tasaActual }: Props) {
 
     setLoading(true);
     try {
-      await registrarEgreso({
+      if (requiereRef && !numeroReferencia.trim()) {
+        toast({ title: "El número de referencia es obligatorio", variant: "destructive" });
+        return;
+      }
+      const tasaNum = parseFloat(tasa) || 0;
+      const r = await registrarEgreso({
         categoriaEgresoId: categoriaId,
         descripcion: descripcion.trim() || null,
-        montoUsd: monedaEgreso === "USD" ? parseFloat(montoUsd) || null : null,
-        montoBs: monedaEgreso === "BS" ? parseFloat(montoBs) || null : null,
-        tasaCambioId: tasaActual?.id ?? null,
+        moneda: monedaEgreso,
+        monto: parseFloat(monedaEgreso === "USD" ? montoUsd : montoBs) || 0,
+        // Se guarda la tasa del día para convertir a USD (antes el reporte usaba la tasa actual).
+        tasaAplicada: tasaNum > 0 ? tasaNum : null,
         formaPago: (formaPago as "EFECTIVO_USD" | "EFECTIVO_BS" | "PAGO_MOVIL_BS" | "TRANSFERENCIA_BS") || null,
+        numeroReferencia: numeroReferencia.trim() || null,
         proveedor: proveedor.trim() || null,
         numeroFactura: numeroFactura.trim() || null,
         fecha,
       });
+      if (!r.ok) {
+        toast({ title: "No se pudo registrar", description: r.error, variant: "destructive" });
+        return;
+      }
 
       toast({ title: "Egreso registrado" });
       router.push("/contabilidad");
-    } catch (e) {
+    } catch {
       toast({
         title: "Error al registrar",
-        description: parsePrismaError(e),
+        description: "Intenta de nuevo.",
         variant: "destructive",
       });
     } finally {
@@ -173,7 +184,7 @@ export function EgresoForm({ categorias, tasaActual }: Props) {
               </div>
               <div>
                 <label className="block text-xs font-medium text-gray-600 mb-1.5">
-                  Tasa BCV (referencia)
+                  Tasa del día (referencia)
                 </label>
                 <input
                   type="number"
@@ -185,18 +196,32 @@ export function EgresoForm({ categorias, tasaActual }: Props) {
               </div>
             </div>
           ) : (
-            <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1.5">
-                Monto Bs *
-              </label>
-              <input
-                type="number"
-                step="0.01"
-                value={montoBs}
-                onChange={(e) => setMontoBs(e.target.value)}
-                placeholder="0.00"
-                className="w-full border border-gray-200 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1.5">
+                  Monto Bs *
+                </label>
+                <input
+                  type="number"
+                  step="0.01"
+                  value={montoBs}
+                  onChange={(e) => setMontoBs(e.target.value)}
+                  placeholder="0.00"
+                  className="w-full border border-gray-200 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1.5">
+                  Tasa del día (Bs/$1) *
+                </label>
+                <input
+                  type="number"
+                  step="0.0001"
+                  value={tasa}
+                  onChange={(e) => setTasa(e.target.value)}
+                  className="w-full border border-gray-200 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
             </div>
           )}
         </div>

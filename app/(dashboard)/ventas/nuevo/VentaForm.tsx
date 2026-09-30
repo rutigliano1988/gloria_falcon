@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { DatePicker } from "@/components/ui/date-picker";
@@ -10,7 +10,6 @@ import {
   formatBS,
   calcularBs,
   FORMA_PAGO_LABELS,
-  parsePrismaError,
 } from "@/lib/utils";
 import { registrarVenta } from "../actions";
 import type { getVentaFormData } from "../actions";
@@ -46,16 +45,16 @@ export function VentaForm({ productos, tasaActual }: Props) {
   const [observaciones, setObservaciones] = useState("");
   const [loading, setLoading] = useState(false);
 
-  // Cambiar forma de pago al cambiar moneda
-  useEffect(() => {
-    setFormaPago(monedaPagada === "USD" ? "EFECTIVO_USD" : "EFECTIVO_BS");
-  }, [monedaPagada]);
+  const cambiarMoneda = (m: string) => {
+    setMonedaPagada(m);
+    setFormaPago(m === "USD" ? "EFECTIVO_USD" : "EFECTIVO_BS");
+  };
 
-  // Al cambiar de modo, limpiar conceptos
-  useEffect(() => {
+  const cambiarModo = (m: "VENTA" | "INGRESO_MANUAL") => {
+    setModo(m);
     setConceptos([]);
     setProductoSeleccionado("");
-  }, [modo]);
+  };
 
   const agregarProducto = () => {
     const prod = productos.find((p) => p.id === productoSeleccionado);
@@ -107,9 +106,7 @@ export function VentaForm({ productos, tasaActual }: Props) {
     try {
       const result = await registrarVenta({
         tipo: modo,
-        montoUsd: totalUsd,
-        montoBs: totalBs,
-        tasaCambioId: tasaActual?.id ?? null,
+        tasaAplicada: monedaPagada === "BS" ? tasaNum : null,
         monedaPagada: monedaPagada as "USD" | "BS",
         formaPago: formaPago as
           | "EFECTIVO_USD"
@@ -125,12 +122,16 @@ export function VentaForm({ productos, tasaActual }: Props) {
         })),
       });
 
+      if (!result.ok) {
+        toast({ title: "No se pudo registrar", description: result.error, variant: "destructive" });
+        return;
+      }
       toast({ title: `Registrado — Recibo ${result.numeroRecibo}` });
       router.push(`/ventas/${result.pagoId}`);
-    } catch (e) {
+    } catch {
       toast({
         title: "Error al registrar",
-        description: parsePrismaError(e),
+        description: "Intenta de nuevo.",
         variant: "destructive",
       });
     } finally {
@@ -149,7 +150,7 @@ export function VentaForm({ productos, tasaActual }: Props) {
           {(["VENTA", "INGRESO_MANUAL"] as const).map((m) => (
             <button
               key={m}
-              onClick={() => setModo(m)}
+              onClick={() => cambiarModo(m)}
               className={[
                 "flex-1 py-3 px-4 rounded-lg border text-sm font-medium transition-colors",
                 modo === m
@@ -289,7 +290,7 @@ export function VentaForm({ productos, tasaActual }: Props) {
                       name="moneda"
                       value={m}
                       checked={monedaPagada === m}
-                      onChange={() => setMonedaPagada(m)}
+                      onChange={() => cambiarMoneda(m)}
                       className="accent-blue-600"
                     />
                     <span className="text-sm">

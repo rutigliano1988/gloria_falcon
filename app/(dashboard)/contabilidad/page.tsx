@@ -7,6 +7,7 @@ import { ResumenContable } from "./ResumenContable";
 import { EgresosTable } from "./EgresosTable";
 import { formatUSD, MESES } from "@/lib/utils";
 import { TasaStaleAlert } from "@/components/TasaStaleAlert";
+import { requireUser } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
@@ -19,7 +20,7 @@ export default async function ContabilidadPage({
   const mes = mesParam ? parseInt(mesParam) : undefined;
   const ano = anoParam ? parseInt(anoParam) : undefined;
 
-  const data = await getContabilidadData(mes, ano);
+  const [data, usuario] = await Promise.all([getContabilidadData(mes, ano), requireUser()]);
 
   const hoy = new Date();
   const anos = Array.from(
@@ -162,7 +163,7 @@ export default async function ContabilidadPage({
       />
 
       {/* Tabla de egresos */}
-      <EgresosTable egresos={data.egresos} />
+      <EgresosTable egresos={data.egresos} puedeAnular={usuario.rol === "ADMIN"} />
     </div>
   );
 }

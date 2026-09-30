@@ -4,7 +4,9 @@ import { ArrowLeft, FileText } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
-import { getPagoById, getConfigColegio } from "../actions";
+import { getPagoById, getConfigColegio, anularPago } from "../actions";
+import { AnularButton } from "@/components/AnularButton";
+import { requireUser } from "@/lib/auth";
 import { formatUSD, formatBS, formatFecha, FORMA_PAGO_LABELS } from "@/lib/utils";
 
 export default async function DetallePagoPage({
@@ -13,7 +15,7 @@ export default async function DetallePagoPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const [pago, config] = await Promise.all([getPagoById(id), getConfigColegio()]);
+  const [pago, config, usuario] = await Promise.all([getPagoById(id), getConfigColegio(), requireUser()]);
 
   if (!pago) notFound();
 
@@ -31,7 +33,8 @@ export default async function DetallePagoPage({
 
   const totalUsd = Number(pago.montoUsd);
   const totalBs = pago.montoBs ? Number(pago.montoBs) : null;
-  const tasa = pago.tasaCambio ? Number(pago.tasaCambio.tasa) : null;
+  // Tasa realmente aplicada al cobro; en pagos antiguos, la tasa oficial registrada.
+  const tasa = pago.tasaAplicada ? Number(pago.tasaAplicada) : pago.tasaCambio ? Number(pago.tasaCambio.tasa) : null;
 
   return (
     <div className="max-w-2xl mx-auto space-y-5">
@@ -58,13 +61,26 @@ export default async function DetallePagoPage({
             </p>
           </div>
         </div>
+        <div className="flex gap-2">
+        {usuario.rol === "ADMIN" && !pago.deletedAt && (
+          <AnularButton accion={anularPago.bind(null, pago.id)} descripcion={`el recibo ${pago.numeroRecibo ?? ""}`} />
+        )}
         <a href={`/api/recibo/${pago.id}`} target="_blank" rel="noreferrer">
           <Button variant="outline" size="sm">
             <FileText className="h-4 w-4 mr-2" />
             Descargar PDF
           </Button>
         </a>
+        </div>
       </div>
+
+      {pago.deletedAt && (
+        <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-800">
+          <p className="font-semibold">Pago ANULADO el {formatFecha(pago.deletedAt)}{pago.anuladoPor ? ` por ${pago.anuladoPor}` : ""}</p>
+          {pago.motivoAnulacion && <p className="mt-1">Motivo: {pago.motivoAnulacion}</p>}
+          <p className="mt-1 text-xs">No cuenta en la solvencia ni en los totales.</p>
+        </div>
+      )}
 
       {/* Datos del colegio */}
       {config && (
@@ -147,7 +163,7 @@ export default async function DetallePagoPage({
           </div>
           {tasa && (
             <div>
-              <p className="text-xs text-gray-400 uppercase mb-0.5">Tasa BCV</p>
+              <p className="text-xs text-gray-400 uppercase mb-0.5">Tasa aplicada</p>
               <p className="text-sm font-medium">{tasa.toFixed(4)} Bs/$1</p>
             </div>
           )}

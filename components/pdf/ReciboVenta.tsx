@@ -75,11 +75,17 @@ interface Props {
 export function ReciboVenta({ venta, config, logoBase64 }: Props) {
   const totalUsd = Number(venta.montoUsd);
   const totalBs = venta.montoBs ? Number(venta.montoBs) : null;
-  const tasa = venta.tasaCambio ? Number(venta.tasaCambio.tasa) : null;
+  // Tasa realmente aplicada; en registros antiguos, la tasa oficial asociada.
+  const tasa = venta.tasaAplicada ? Number(venta.tasaAplicada) : venta.tasaCambio ? Number(venta.tasaCambio.tasa) : null;
 
   return (
     <Document>
       <Page size="A4" style={styles.page}>
+        {venta.deletedAt && (
+          <Text style={{ color: "#b91c1c", fontSize: 14, fontFamily: "Helvetica-Bold", textAlign: "center", borderWidth: 2, borderColor: "#b91c1c", padding: 6, marginBottom: 10 }}>
+            ANULADO{venta.motivoAnulacion ? ` — ${venta.motivoAnulacion}` : ""}
+          </Text>
+        )}
         {/* Encabezado */}
         <View style={styles.header}>
           {logoBase64 && <Image src={logoBase64} style={styles.logo} />}
@@ -127,7 +133,7 @@ export function ReciboVenta({ venta, config, logoBase64 }: Props) {
         {/* Equivalente Bs */}
         {totalBs && tasa && (
           <View style={styles.bsTotal}>
-            <Text style={styles.bsTotalLabel}>Tasa BCV: {tasa.toFixed(4)} Bs / $1</Text>
+            <Text style={styles.bsTotalLabel}>Tasa aplicada: {tasa.toFixed(4)} Bs / $1</Text>
             <Text style={styles.bsTotalValue}>Equivalente: {fmtBs(totalBs)}</Text>
           </View>
         )}

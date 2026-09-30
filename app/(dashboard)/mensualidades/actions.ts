@@ -1,6 +1,16 @@
 "use server";
 
-import { requireUser } from "@/lib/auth";
+import { requireAdmin, requireUser } from "@/lib/auth";
+import { registrarAudit } from "@/lib/audit";
+import {
+  calcularConceptosMensualidad,
+  conceptosEsperados,
+  mesesConCobroPrevio,
+  montoBsDesdeUsd,
+  redondear2,
+  totalConceptos,
+  type ConceptoCalculado,
+} from "@/lib/finanzas";
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
@@ -10,6 +20,7 @@ import {
   getMesesAnoEscolar,
   getMesAnoActual,
   mesAnoToNum,
+  formatMesAno,
 } from "@/lib/utils";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -237,108 +248,252 @@ export async function getPagoFormData() {
       })
     : [];
 
-  return { alumnos, anoActivo, tasaActual, productos };
+  // Meses ya cobrados por alumno: el formulario los deshabilita (evita cobrar dos veces).
+  const cobrados = anoActivo
+    ? await prisma.conceptoPago.findMany({
+        where: {
+          mesAno: { not: null },
+          pago: {
+            alumnoId: { in: alumnos.map((a) => a.id) },
+            anoEscolarId: anoActivo.id,
+            tipo: "MENSUALIDAD",
+            deletedAt: null,
+          },
+        },
+        select: { mesAno: true, concepto: true, pago: { select: { alumnoId: true } } },
+      })
+    : [];
+
+  const alumnosConCobros = alumnos.map((a) => {
+    const servicios = a.inscripciones[0]?.servicios.map((s) => s.tipo) ?? [];
+    const esperados = conceptosEsperados(servicios);
+    const propios = cobrados.filter((c) => c.pago.alumnoId === a.id);
+    const meses = [...new Set(propios.map((c) => c.mesAno!))];
+    return { ...a, mesesCobrados: mesesConCobroPrevio(meses, propios, esperados) };
+  });
+
+  return { alumnos: alumnosConCobros, anoActivo, tasaActual, productos };
 }
 
 // ─── Registrar pago ───────────────────────────────────────────────────────────
 
-const conceptoPagoInputSchema = z.object({
-  concepto: z.string().min(1),
-  mesAno: z
-    .string()
-    .regex(/^\d{2}\/\d{4}$/)
-    .nullable(),
-  montoUsd: z.number(),
-});
+const FORMAS_PAGO = ["EFECTIVO_USD", "EFECTIVO_BS", "PAGO_MOVIL_BS", "TRANSFERENCIA_BS"] as const;
 
+// El cliente elige meses, conceptos adicionales y forma de pago. Los montos de
+// mensualidad, servicios y descuento los calcula el servidor (A3 de REVIEW.md).
 const registrarPagoSchema = z.object({
-  alumnoId: z.string().min(1),
-  anoEscolarId: z.string().min(1),
-  montoUsd: z.number().positive("El monto debe ser mayor a 0"),
-  montoBs: z.number().nonnegative().nullable(),
-  tasaCambioId: z.string().nullable(),
+  alumnoId: z.string().min(1).max(50),
+  anoEscolarId: z.string().min(1).max(50),
+  meses: z.array(z.string().regex(/^\d{2}\/\d{4}$/)).min(1, "Selecciona al menos un mes").max(12),
+  conceptosAdicionales: z
+    .array(
+      z.object({
+        concepto: z.string().trim().min(1, "Describe el concepto adicional").max(80),
+        montoUsd: z.number().positive("Los conceptos adicionales deben ser mayores a 0").max(100000),
+      })
+    )
+    .max(10)
+    .default([]),
   monedaPagada: z.enum(["USD", "BS"]),
-  formaPago: z.enum(["EFECTIVO_USD", "EFECTIVO_BS", "PAGO_MOVIL_BS", "TRANSFERENCIA_BS"]),
-  numeroReferencia: z.string().nullable(),
-  fechaPago: z.string().min(1),
-  observaciones: z.string().nullable(),
-  conceptos: z.array(conceptoPagoInputSchema).min(1, "Debe incluir al menos un concepto"),
+  formaPago: z.enum(FORMAS_PAGO),
+  tasaAplicada: z.number().positive().max(10_000_000).nullable(),
+  numeroReferencia: z.string().trim().max(60).nullable(),
+  fechaPago: z.iso.date("Fecha de pago inválida"),
+  observaciones: z.string().trim().max(500).nullable(),
 });
 
-export type RegistrarPagoInput = z.infer<typeof registrarPagoSchema>;
+export type RegistrarPagoInput = z.input<typeof registrarPagoSchema>;
+export type ResultadoPago =
+  | { ok: true; pagoId: string; numeroRecibo: string }
+  | { ok: false; error: string };
 
-export async function registrarPago(data: RegistrarPagoInput) {
-  await requireUser();
-  const parsed = registrarPagoSchema.parse(data);
+class ErrorValidacion extends Error {}
+
+export async function registrarPago(data: RegistrarPagoInput): Promise<ResultadoPago> {
+  const usuario = await requireUser();
+  const parsed = registrarPagoSchema.safeParse(data);
+  if (!parsed.success) return { ok: false, error: parsed.error.issues.map((i) => i.message).join(" · ") };
+  const d = parsed.data;
+
+  // Coherencia moneda / forma de pago / referencia / tasa
+  if ((d.monedaPagada === "USD") !== (d.formaPago === "EFECTIVO_USD")) {
+    return { ok: false, error: "La forma de pago no corresponde a la moneda." };
+  }
+  const referencia = d.numeroReferencia || null;
+  if (["PAGO_MOVIL_BS", "TRANSFERENCIA_BS"].includes(d.formaPago) && !referencia) {
+    return { ok: false, error: "El número de referencia es obligatorio para este tipo de pago." };
+  }
+  if (d.monedaPagada === "BS" && !d.tasaAplicada) {
+    return { ok: false, error: "Ingresa la tasa de cambio aplicada." };
+  }
+  const fechaPago = new Date(d.fechaPago);
+  if (fechaPago.getTime() > Date.now() + 36 * 60 * 60 * 1000) {
+    return { ok: false, error: "La fecha de pago no puede ser futura." };
+  }
+
+  const [inscripcion, productos, tasaOficial] = await Promise.all([
+    prisma.inscripcion.findUnique({
+      where: { alumnoId_anoEscolarId: { alumnoId: d.alumnoId, anoEscolarId: d.anoEscolarId } },
+      include: { anoEscolar: true, servicios: { where: { activo: true } } },
+    }),
+    prisma.producto.findMany({ where: { activo: true } }),
+    prisma.tasaCambio.findFirst({ orderBy: { fechaRegistro: "desc" } }),
+  ]);
+  if (!inscripcion) return { ok: false, error: "El alumno no está inscrito en ese año escolar." };
+
+  const mesesValidos = getMesesAnoEscolar(inscripcion.anoEscolar.nombre);
+  const mesActualNum = mesAnoToNum(getMesAnoActual());
+  const meses = [...new Set(d.meses)];
+  if (meses.some((m) => !mesesValidos.includes(m) || mesAnoToNum(m) > mesActualNum)) {
+    return { ok: false, error: "Hay meses que no pertenecen al año escolar o todavía no han llegado." };
+  }
+
+  const precios = Object.fromEntries(productos.map((p) => [p.nombre, Number(p.precioUsd)]));
+  const servicios = inscripcion.servicios.map((s) => s.tipo);
+  let conceptos: ConceptoCalculado[];
+  try {
+    conceptos = [
+      ...calcularConceptosMensualidad({
+        meses,
+        serviciosActivos: servicios,
+        precios,
+        descuentoMensualUsd: Number(inscripcion.descuentoMontoUsd ?? 0),
+      }),
+      ...d.conceptosAdicionales.map((c) => ({ concepto: c.concepto, mesAno: null, montoUsd: redondear2(c.montoUsd) })),
+    ];
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "No se pudieron calcular los conceptos." };
+  }
+  const montoUsd = totalConceptos(conceptos);
+  if (!(montoUsd > 0)) return { ok: false, error: "El monto total debe ser mayor a 0." };
+  const tasaAplicada = d.monedaPagada === "BS" ? d.tasaAplicada! : null;
+  const montoBs = tasaAplicada ? montoBsDesdeUsd(montoUsd, tasaAplicada) : null;
+  const esperados = conceptosEsperados(servicios);
 
   let result!: { pagoId: string; numeroRecibo: string };
-  for (let intento = 0; intento < 3; intento++) {
-    try {
-      result = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
-        const anoEscolar = await tx.anoEscolar.findUnique({
-          where: { id: parsed.anoEscolarId },
+  try {
+    for (let intento = 0; intento < 3; intento++) {
+      try {
+        result = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+          // Serializa los cobros del mismo alumno: sin esto, dos cobros simultáneos
+          // del mismo mes pasarían ambos la verificación de duplicados.
+          await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${d.alumnoId}))`;
+
+          const previos = await tx.conceptoPago.findMany({
+            where: {
+              mesAno: { in: meses },
+              pago: { alumnoId: d.alumnoId, anoEscolarId: d.anoEscolarId, tipo: "MENSUALIDAD", deletedAt: null },
+            },
+            select: { mesAno: true, concepto: true },
+          });
+          const repetidos = mesesConCobroPrevio(meses, previos, esperados);
+          if (repetidos.length > 0) {
+            throw new ErrorValidacion(`Ya hay un cobro registrado para: ${repetidos.map(formatMesAno).join(", ")}.`);
+          }
+
+          if (referencia) {
+            const mismaReferencia = await tx.pago.findFirst({
+              where: { formaPago: d.formaPago, numeroReferencia: referencia, deletedAt: null },
+              select: { numeroRecibo: true },
+            });
+            if (mismaReferencia) {
+              throw new ErrorValidacion(
+                `La referencia ${referencia} ya se usó en el recibo ${mismaReferencia.numeroRecibo ?? "(sin número)"}.`
+              );
+            }
+          }
+
+          const anoStr = inscripcion.anoEscolar.nombre.substring(0, 4);
+          const ultimoRecibo = await tx.pago.findFirst({
+            where: { anoEscolarId: d.anoEscolarId, numeroRecibo: { not: null } },
+            orderBy: { numeroRecibo: "desc" },
+          });
+          let nextNum = 1;
+          if (ultimoRecibo?.numeroRecibo) {
+            const partes = ultimoRecibo.numeroRecibo.split("-");
+            const ultimo = parseInt(partes[partes.length - 1]);
+            if (!isNaN(ultimo)) nextNum = ultimo + 1;
+          }
+          const numeroRecibo = `${anoStr}-${String(nextNum).padStart(4, "0")}`;
+
+          const pago = await tx.pago.create({
+            data: {
+              tipo: "MENSUALIDAD",
+              alumnoId: d.alumnoId,
+              anoEscolarId: d.anoEscolarId,
+              montoUsd,
+              montoBs,
+              tasaAplicada,
+              tasaCambioId: tasaOficial?.id ?? null,
+              monedaPagada: d.monedaPagada,
+              formaPago: d.formaPago,
+              numeroReferencia: referencia,
+              fechaPago,
+              observaciones: d.observaciones || null,
+              numeroRecibo,
+            },
+          });
+          await tx.conceptoPago.createMany({
+            data: conceptos.map((c) => ({ pagoId: pago.id, ...c })),
+          });
+          return { pagoId: pago.id, numeroRecibo };
         });
-        const anoStr = anoEscolar?.nombre?.substring(0, 4) ?? new Date().getFullYear().toString();
-
-        const ultimoRecibo = await tx.pago.findFirst({
-          where: {
-            anoEscolarId: parsed.anoEscolarId,
-            numeroRecibo: { not: null },
-          },
-          orderBy: { numeroRecibo: "desc" },
-        });
-
-        let nextNum = 1;
-        if (ultimoRecibo?.numeroRecibo) {
-          const partes = ultimoRecibo.numeroRecibo.split("-");
-          const ultimo = parseInt(partes[partes.length - 1]);
-          if (!isNaN(ultimo)) nextNum = ultimo + 1;
-        }
-        const numeroRecibo = `${anoStr}-${String(nextNum).padStart(4, "0")}`;
-
-        const pago = await tx.pago.create({
-          data: {
-            tipo: "MENSUALIDAD",
-            alumnoId: parsed.alumnoId,
-            anoEscolarId: parsed.anoEscolarId,
-            montoUsd: parsed.montoUsd,
-            montoBs: parsed.montoBs,
-            tasaCambioId: parsed.tasaCambioId,
-            monedaPagada: parsed.monedaPagada,
-            formaPago: parsed.formaPago,
-            numeroReferencia: parsed.numeroReferencia,
-            fechaPago: new Date(parsed.fechaPago),
-            observaciones: parsed.observaciones,
-            numeroRecibo,
-          },
-        });
-
-        await tx.conceptoPago.createMany({
-          data: parsed.conceptos.map((c) => ({
-            pagoId: pago.id,
-            concepto: c.concepto,
-            mesAno: c.mesAno,
-            montoUsd: c.montoUsd,
-          })),
-        });
-
-        return { pagoId: pago.id, numeroRecibo };
-      });
-      break;
-    } catch (e) {
-      const esColision =
-        e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002";
-      if (esColision && intento < 2) continue;
-      throw e;
+        break;
+      } catch (e) {
+        const esColision = e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002";
+        if (esColision && intento < 2) continue;
+        throw e;
+      }
     }
+  } catch (e) {
+    if (e instanceof ErrorValidacion) return { ok: false, error: e.message };
+    throw e;
   }
+
+  await registrarAudit({
+    accion: "PAGO_REGISTRADO",
+    entidad: "Pago",
+    entidadId: result.pagoId,
+    meta: { numeroRecibo: result.numeroRecibo, montoUsd, meses, registradoPor: usuario.email },
+  });
 
   revalidatePath("/mensualidades");
   revalidatePath("/mensualidades/nuevo");
-  revalidatePath(`/mensualidades/${result.pagoId}`);
   revalidatePath("/dashboard");
 
-  return result;
+  return { ok: true, ...result };
+}
+
+// ─── Anular pago (mensualidad, venta o ingreso) ───────────────────────────────
+
+const anularSchema = z.object({
+  id: z.string().min(1).max(50),
+  motivo: z.string().trim().min(5, "Indica el motivo de la anulación (mínimo 5 caracteres)").max(300),
+});
+
+/** Solo ADMIN. El pago no se borra: queda marcado como anulado y fuera de los totales. */
+export async function anularPago(id: string, motivo: string): Promise<{ ok: boolean; error?: string }> {
+  const usuario = await requireAdmin();
+  const parsed = anularSchema.safeParse({ id, motivo });
+  if (!parsed.success) return { ok: false, error: parsed.error.issues.map((i) => i.message).join(" · ") };
+
+  const { count } = await prisma.pago.updateMany({
+    where: { id: parsed.data.id, deletedAt: null },
+    data: { deletedAt: new Date(), anuladoPor: usuario.email, motivoAnulacion: parsed.data.motivo },
+  });
+  if (count === 0) return { ok: false, error: "El pago no existe o ya estaba anulado." };
+
+  await registrarAudit({
+    accion: "PAGO_ANULADO",
+    entidad: "Pago",
+    entidadId: parsed.data.id,
+    meta: { motivo: parsed.data.motivo },
+  });
+  revalidatePath("/mensualidades");
+  revalidatePath("/ventas");
+  revalidatePath("/contabilidad");
+  revalidatePath("/dashboard");
+  return { ok: true };
 }
 
 // ─── Detalle de un pago ───────────────────────────────────────────────────────

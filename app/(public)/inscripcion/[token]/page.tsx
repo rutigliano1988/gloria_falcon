@@ -24,9 +24,7 @@ export default async function InscripcionPage({
 }) {
   const { token } = await params;
   const solicitud = await getSolicitudPorToken(token);
-  const expirada =
-    solicitud?.estado === "PENDIENTE" &&
-    (!solicitud.expiraEn || solicitud.expiraEn.getTime() <= Date.now());
+  const expirada = solicitud?.estado === "PENDIENTE" && !solicitud.vigente;
 
   return (
     <div className="min-h-full">

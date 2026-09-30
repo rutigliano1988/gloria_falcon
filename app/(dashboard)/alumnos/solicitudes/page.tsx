@@ -113,7 +113,7 @@ export default async function SolicitudesPage() {
                     <td className="px-4 py-3">
                       {s.estado === "PENDIENTE" ? (
                         <div className="flex flex-wrap items-center gap-2">
-                          {s.expiraEn && s.expiraEn.getTime() > Date.now() ? (
+                          {s.enlaceVigente && s.expiraEn ? (
                             <>
                               <CopyLinkButton token={s.token} />
                               <span className="text-xs text-muted-foreground">

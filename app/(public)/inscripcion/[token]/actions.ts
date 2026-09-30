@@ -58,10 +58,11 @@ const solicitudSchema = z.object({
 export type SolicitudFormData = z.infer<typeof solicitudSchema>;
 
 export async function getSolicitudPorToken(token: string) {
-  return prisma.solicitudInscripcion.findUnique({
+  const s = await prisma.solicitudInscripcion.findUnique({
     where: { token },
     select: { id: true, estado: true, expiraEn: true },
   });
+  return s ? { estado: s.estado, vigente: vigente(s.expiraEn) } : null;
 }
 
 function vigente(expiraEn: Date | null): boolean {

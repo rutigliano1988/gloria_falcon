@@ -44,13 +44,18 @@ export async function generarEnlaceSolicitud(): Promise<void> {
 
 export async function getSolicitudes() {
   await requireUser();
-  return prisma.solicitudInscripcion.findMany({
+  const ahora = Date.now();
+  const solicitudes = await prisma.solicitudInscripcion.findMany({
     orderBy: { creadoEn: "desc" },
     select: {
       id: true, token: true, estado: true, creadoEn: true, expiraEn: true,
       primerApellido: true, primerNombre: true, segundoApellido: true,
     },
   });
+  return solicitudes.map((s) => ({
+    ...s,
+    enlaceVigente: s.expiraEn != null && s.expiraEn.getTime() > ahora,
+  }));
 }
 
 export async function getSolicitudDetalle(id: string) {

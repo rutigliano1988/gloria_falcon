@@ -162,3 +162,21 @@ Vercel:
 Decisiones:
 - Solo queda un Crítico: C1. Recomiendo fijar la región `dub1`.
 - REVIEW.md actualizado: segunda actualización, índice, resumen, plan, "Lo que no pude revisar" y preguntas.
+
+## 12. Implementación de la fase 0 (a pedido del usuario)
+
+Un commit por bloque, cada uno verificado con tests, `tsc`, lint y build antes de subirlo:
+1. `c1c76d2` C3: Next 16.3.7, fuera `remotePatterns` y `allowedOrigins`, región `dub1`, prisma CLI a devDependencies. npm audit: 0 críticas.
+2. `f94b3f0` C1, A1, M16: `lib/roles.ts` + `lib/auth.ts` (server-only) con denegación por defecto; autorización en todas las acciones y rutas API; nómina solo ADMIN; test estático de autorización (comprobado por mutación).
+3. `83e7ad7` A2, C2: migraciones idempotentes de fechaNacimiento y RLS. Verificadas en un Postgres 16 local: deploy desde cero, `migrate diff` sin diferencias, 23/23 tablas con RLS y segunda ejecución sin cambios.
+4. `25a1390` + `cbae6c5` M1, M2, A5 parcial: estados de las solicitudes, token aleatorio con caducidad, anulación de enlaces, limpieza de datos, tests de integración (comprobados por mutación).
+5. `d0313f4` AGENTS.md regenerado por `next dev` 16.3 (generador oficial verificado).
+6. `12e7807` M14: DatePicker con selector de mes y año (verificado con Playwright y captura).
+7. `4f36382` A3, A4, M8, M9, M10, B4, B6: `lib/finanzas.ts`, `lib/reportes.ts`, anulación con auditoría, migración con backfill (probada con datos de ejemplo), tests unitarios y de integración.
+
+Decisiones y hallazgos durante la implementación:
+- Los tests de integración usan un Postgres local (`TEST_DATABASE_URL`) y corren en serie (`--no-file-parallelism`), porque los archivos comparten base. `setup.ts` se niega a apuntar a Supabase.
+- El test de cobro simultáneo pasa aun sin el advisory lock: la colisión del número de recibo más el reintento ya serializa los cobros. Se mantiene el lock como defensa explícita.
+- Cambio de regla de negocio a confirmar: la secretaria ya no puede editar los montos de mensualidad ni de servicios al cobrar; solo puede agregar conceptos adicionales positivos.
+- Pendiente de A5 (necesita decisiones del usuario): textos legales de aviso y consentimiento, pantallas de rectificación y baja, y plazos de retención.
+- No hice ninguna escritura en producción (ni en Supabase ni en Vercel).

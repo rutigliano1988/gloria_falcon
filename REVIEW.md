@@ -417,6 +417,30 @@ Consulté solo metadatos y conteos; no leí ninguna fila con datos de alumnos, p
 
 ---
 
+## Estado de los arreglos (fase 0, 30/09/2026)
+
+Implementado en la rama `claude/busy-gates-kb3ip8` (un commit por bloque; tests, `tsc`, lint y build en verde):
+
+| Hallazgo | Estado | Nota |
+|---|---|---|
+| C1 | ✅ código | Sin rol = sin acceso (proxy, layout, login, acciones). **Antes de desplegar**, hay que asignarle rol a la cuenta que hoy no lo tiene. |
+| C2 | ✅ | RLS y REVOKE versionados en una migración idempotente. |
+| C3 | ✅ | `next@16.3.7`, sin `remotePatterns`, región `dub1`. Quedan avisos altos solo en herramientas del CLI de Prisma y de desarrollo. |
+| A1 | ✅ | Autorización dentro de las 50 acciones y las 6 rutas API, más un test estático que lo vigila. |
+| A2 | ✅ | Migración faltante versionada (idempotente). |
+| A3, M8, M10 | ✅ | Montos calculados en el servidor, cobros duplicados bloqueados, anulación con auditoría, tasa aplicada guardada. |
+| A4, M9, B4, B6 | ✅ | Equivalente en USD con la tasa del día y una sola función de totales. |
+| M1, M2 | ✅ | Máquina de estados, token de 256 bits con caducidad de 14 días y anulación de enlaces. |
+| M14 | ✅ | Selector de mes y año (verificado en el navegador). |
+| M16 | ✅ | Nómina solo para ADMIN; agregada en contabilidad para la secretaria. |
+| A5 | 🟡 parcial | Hecho: limpieza de los datos de la solicitud al decidirla y límites de datos del formulario público. **Pendiente de decisiones:** aviso de privacidad y consentimiento, rectificación y baja/anonimización, retención. |
+| B8, M11 (parcial) | ✅ | Login con mensajes fijos; las acciones de dinero devuelven `{ ok, error }`. |
+
+**Para llevarlo a producción:**
+1. Asignar rol a la cuenta sin rol.
+2. Ejecutar `prisma migrate deploy` contra producción (4 migraciones nuevas, todas idempotentes).
+3. Fusionar la rama y desplegar.
+
 ## Plan de arreglos sugerido
 
 Esfuerzo: **S** ≈ horas a 1 día · **M** ≈ 2 a 5 días · **L** ≈ 1 a 2 semanas.

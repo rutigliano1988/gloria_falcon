@@ -2,7 +2,7 @@
 
 import { DayPicker } from "react-day-picker";
 import { es } from "date-fns/locale";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { ChevronDown, ChevronLeft, ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export type CalendarProps = React.ComponentProps<typeof DayPicker>;
@@ -17,6 +17,8 @@ export function Calendar({ className, classNames, showOutsideDays = true, ...pro
         Chevron: ({ orientation }: { orientation?: string }) =>
           orientation === "left" ? (
             <ChevronLeft className="h-4 w-4" />
+          ) : orientation === "down" ? (
+            <ChevronDown className="h-3.5 w-3.5 opacity-60" />
           ) : (
             <ChevronRight className="h-4 w-4" />
           ),
@@ -25,8 +27,8 @@ export function Calendar({ className, classNames, showOutsideDays = true, ...pro
         root: "",
         months: "flex flex-col sm:flex-row gap-2",
         month: "flex flex-col gap-4",
-        month_caption: "flex justify-center pt-1 relative items-center",
-        caption_label: "text-sm font-medium capitalize",
+        month_caption: "flex justify-center pt-1 relative items-center px-8",
+        caption_label: "inline-flex items-center gap-1 text-sm font-medium capitalize",
         nav: "flex items-start",
         button_previous:
           "absolute left-1 top-0 h-7 w-7 inline-flex items-center justify-center rounded-md border border-input bg-transparent p-0 opacity-50 hover:opacity-100",
@@ -59,9 +61,11 @@ export function Calendar({ className, classNames, showOutsideDays = true, ...pro
         caption_before_enter: "",
         caption_before_exit: "",
         chevron: "h-4 w-4",
-        dropdowns: "",
-        dropdown: "",
-        dropdown_root: "",
+        // captionLayout="dropdown": un <select> invisible encima de una etiqueta visible.
+        dropdowns: "flex items-center gap-1.5",
+        dropdown: "absolute inset-0 w-full cursor-pointer opacity-0",
+        dropdown_root:
+          "relative inline-flex items-center gap-1 rounded-md border border-input px-1.5 py-0.5 text-sm hover:bg-accent",
         footer: "",
         months_dropdown: "",
         years_dropdown: "",

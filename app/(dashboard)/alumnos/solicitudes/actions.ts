@@ -5,11 +5,40 @@ import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 import { registrarAudit } from "@/lib/audit";
 import { redirect } from "next/navigation";
-import type { Prisma } from "@prisma/client";
+import { Prisma } from "@prisma/client";
+import { randomBytes } from "crypto";
+
+// Vigencia de un enlace de inscripción sin usar.
+const DIAS_VIGENCIA_ENLACE = 14;
+
+// Al decidir una solicitud, los datos ya pasaron a la ficha del alumno (o se
+// descartan): se borran de la solicitud y solo se conservan los nombres para
+// el listado (minimización de datos de menores, A5 de REVIEW.md).
+const DATOS_PERSONALES_VACIOS = {
+  cedulaEscolar: null,
+  municipioNacimiento: null,
+  estadoNacimiento: null,
+  sexo: null,
+  fechaNacimiento: null,
+  domicilio: null,
+  telefonoHogar: null,
+  procedencia: null,
+  nombrePlantelOrigen: null,
+  datosSalud: Prisma.DbNull,
+  representantes: Prisma.DbNull,
+  autorizados: Prisma.DbNull,
+  contactosEmergencia: Prisma.DbNull,
+} satisfies Prisma.SolicitudInscripcionUpdateInput;
 
 export async function generarEnlaceSolicitud(): Promise<void> {
   await requireUser();
-  await prisma.solicitudInscripcion.create({ data: {} });
+  await prisma.solicitudInscripcion.create({
+    data: {
+      // 256 bits aleatorios: el enlace no debe poder adivinarse.
+      token: randomBytes(32).toString("base64url"),
+      expiraEn: new Date(Date.now() + DIAS_VIGENCIA_ENLACE * 24 * 60 * 60 * 1000),
+    },
+  });
   revalidatePath("/alumnos/solicitudes");
 }
 
@@ -18,7 +47,7 @@ export async function getSolicitudes() {
   return prisma.solicitudInscripcion.findMany({
     orderBy: { creadoEn: "desc" },
     select: {
-      id: true, token: true, estado: true, creadoEn: true,
+      id: true, token: true, estado: true, creadoEn: true, expiraEn: true,
       primerApellido: true, primerNombre: true, segundoApellido: true,
     },
   });
@@ -53,7 +82,19 @@ export async function aprobarSolicitud(
     throw new Error("La solicitud no tiene datos completos del estudiante.");
   }
 
+  if (solicitud.estado !== "EN_REVISION") {
+    throw new Error("La solicitud ya fue procesada.");
+  }
+
   await prisma.$transaction(async (tx) => {
+    // Reclamar la solicitud primero: si otra persona la aprobó o rechazó a la
+    // vez, count = 0 y se aborta todo (evita alumnos duplicados).
+    const reclamada = await tx.solicitudInscripcion.updateMany({
+      where: { id, estado: "EN_REVISION" },
+      data: { estado: "APROBADA" },
+    });
+    if (reclamada.count === 0) throw new Error("La solicitud ya fue procesada.");
+
     const alumno = await tx.alumno.create({
       data: {
         primerApellido: solicitud.primerApellido!,
@@ -148,11 +189,11 @@ export async function aprobarSolicitud(
     await tx.solicitudInscripcion.update({
       where: { id },
       data: {
-        estado: "APROBADA",
         anoEscolarId: data.anoEscolarId,
         gradoId: data.gradoId,
         seccionId: data.seccionId || null,
         observaciones: data.observaciones || null,
+        ...DATOS_PERSONALES_VACIOS,
       },
     });
   });
@@ -170,10 +211,15 @@ export async function aprobarSolicitud(
 
 export async function rechazarSolicitud(id: string, observaciones?: string) {
   await requireAdmin();
-  await prisma.solicitudInscripcion.update({
-    where: { id },
-    data: { estado: "RECHAZADA", observaciones: observaciones || null },
+  const { count } = await prisma.solicitudInscripcion.updateMany({
+    where: { id, estado: "EN_REVISION" },
+    data: {
+      estado: "RECHAZADA",
+      observaciones: observaciones || null,
+      ...DATOS_PERSONALES_VACIOS,
+    },
   });
+  if (count === 0) throw new Error("La solicitud ya fue procesada.");
 
   await registrarAudit({
     accion: "SOLICITUD_RECHAZADA",
@@ -183,4 +229,16 @@ export async function rechazarSolicitud(id: string, observaciones?: string) {
 
   revalidatePath("/alumnos/solicitudes");
   redirect("/alumnos/solicitudes");
+}
+
+/** Anula un enlace que todavía no se usó (p. ej. enviado por error). */
+export async function revocarEnlaceSolicitud(id: string) {
+  await requireUser();
+  const { count } = await prisma.solicitudInscripcion.deleteMany({
+    where: { id, estado: "PENDIENTE" },
+  });
+  if (count > 0) {
+    await registrarAudit({ accion: "ENLACE_SOLICITUD_REVOCADO", entidad: "SolicitudInscripcion", entidadId: id });
+  }
+  revalidatePath("/alumnos/solicitudes");
 }

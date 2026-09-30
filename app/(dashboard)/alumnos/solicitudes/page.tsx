@@ -1,7 +1,7 @@
 export const dynamic = "force-dynamic";
 
 import Link from "next/link";
-import { getSolicitudes, generarEnlaceSolicitud } from "./actions";
+import { getSolicitudes, generarEnlaceSolicitud, revocarEnlaceSolicitud } from "./actions";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Plus } from "lucide-react";
@@ -112,7 +112,26 @@ export default async function SolicitudesPage() {
                     </td>
                     <td className="px-4 py-3">
                       {s.estado === "PENDIENTE" ? (
-                        <CopyLinkButton token={s.token} />
+                        <div className="flex flex-wrap items-center gap-2">
+                          {s.expiraEn && s.expiraEn.getTime() > Date.now() ? (
+                            <>
+                              <CopyLinkButton token={s.token} />
+                              <span className="text-xs text-muted-foreground">
+                                Vence {formatFecha(s.expiraEn)}
+                              </span>
+                            </>
+                          ) : (
+                            <span className="text-xs text-red-600">Enlace expirado</span>
+                          )}
+                          <form action={revocarEnlaceSolicitud.bind(null, s.id)}>
+                            <button
+                              type="submit"
+                              className="text-xs text-gray-500 underline hover:text-red-600"
+                            >
+                              Anular
+                            </button>
+                          </form>
+                        </div>
                       ) : (
                         <Link href={`/alumnos/solicitudes/${s.id}`}>
                           <Button variant="outline" size="sm">Revisar</Button>

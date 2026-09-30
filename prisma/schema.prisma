@@ -409,8 +409,10 @@ enum EstadoSolicitud {
 
 model SolicitudInscripcion {
   id                  String          @id @default(cuid())
-  token               String          @unique @default(cuid())
+  // Token aleatorio de 256 bits generado en generarEnlaceSolicitud (no cuid: no es un secreto).
+  token               String          @unique
   estado              EstadoSolicitud @default(PENDIENTE)
+  expiraEn            DateTime?
 
   // Datos del alumno — llenados por el padre/representante
   primerApellido      String?
